@@ -973,7 +973,8 @@ function update(dt, t) {
     if (d < 6 && !n.follow) { const target = Math.atan2(dx, dz); let diff = target - g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); g.rotation.y += diff * Math.min(1, dt * 5); }
     if (!n.follow) p.y = 0;
     const m = g.userData.mark; if (m.visible) m.position.y = 2.75 + Math.sin(t * 4) * 0.1 + (n.id === 'miso' ? 0.4 : 0);
-    if (d < nd) { nd = d; nearNPC = n; }
+    const sc = d - (n.talk ? 1.2 : 0); // 미션 친구(❗) 우선
+    if (g.visible && d < 3.0 && sc < nd) { nd = sc; nearNPC = n; }
   }
   if (nearNPC && started && !dlgOpen) {
     ui.prompt.style.display = 'block';

@@ -119,3 +119,11 @@ th{background:#f1f5f9;font-family:'Jua',sans-serif;font-weight:normal}
 .stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .stat div{background:#f8fafc;border-radius:14px;padding:12px;text-align:center;font-size:15px}
 .stat b{display:block;font-size:30px;color:var(--ink)}
+
+/* 세 컷 만화 (Lesson 2) */
+.comic{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.cpanel{border:3px solid var(--ink);border-radius:14px;padding:8px;background:#fff;min-height:150px;font-size:16px;line-height:1.35;text-align:left}
+.cemo{font-size:34px;text-align:center;margin-bottom:4px}
+.bub{background:#fffbe6;border-radius:10px;padding:5px 8px;margin:4px 0;font-family:'Jua',sans-serif}
+.bub b{color:var(--accent);margin-right:4px}
+@media (max-width:640px){.comic{grid-template-columns:1fr}.cpanel{min-height:0}}
