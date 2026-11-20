@@ -308,7 +308,7 @@ function drawMapWorld(tx, tz, s) {
   R(0, 0, 8, 90, '#eadfca'); R(0, -2, 52, 6, '#eadfca');
   R(-27, -2, 14, 20, '#e8590c', '라니 집'); R(27, -2, 14, 20, '#e03131', '병원');
   R(0, -36, 40, 9, '#5f3dc4', '이야기 마당'); R(WRITE.x, WRITE.z, 16, 12, '#1971c2', '편지');
-  R(FIELD.x, FIELD.z, 16, 12, '#2f9e44', '운동장'); R(FLOWER.x, FLOWER.z, 7, 5, '#f783ac', '꽃밭'); R(TRUCK.x, TRUCK.z, 3, 6, '#4dabf7');
+  R(FIELD.x, FIELD.z, 16, 12, '#2f9e44', '운동장'); R(FLOWER.x, FLOWER.z, 7, 5, '#f783ac', '꽃밭'); R(TRUCK.x, TRUCK.z, 3, 6, '#4dabf7', '트럭');
 }
 
 // ---------------- 플레이어 ----------------
