@@ -1,6 +1,7 @@
 /* 동아출판 초등 영어 6 · Lesson 2 "What Would You Like to Have?" 학습 자료
    교사가 문장·단어를 바꾸고 싶으면 이 파일만 고치면 됩니다. */
 window.LESSON = {
+  id: 'L2',
   title: "Lesson 2 · What Would You Like to Have?",
   foods: [
     { id: 'beef steak',       ko: '소고기 스테이크', emoji: '🥩' },

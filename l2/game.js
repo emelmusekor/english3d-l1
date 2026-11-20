@@ -14,6 +14,9 @@ const fresh = () => ({ v: 1, stage: 0, stars: 0, correct: 0, tries: 0, streak: 0
 let S = fresh();
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.v === 1) S = Object.assign(fresh(), s); } catch (e) {}
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} };
+// 반 활동 기록 (백엔드가 설정되지 않으면 아무 일도 하지 않아요)
+const track = (type, data) => { try { if (window.NET) window.NET.track(type, data); } catch (e) {} };
+try { if (window.NET) window.NET.init({ lesson: L.id || 'L1' }); } catch (e) {}
 
 // ---------------- 소리 ----------------
 let AC = null;
@@ -492,6 +495,7 @@ function ask(who, en, ko, choices, o = {}) {
         if (c === right) {
           b.classList.add('right'); btns.forEach(x => x.disabled = true); beep('ok');
           S.tries++; if (first) { S.correct++; S.streak++; S.best = Math.max(S.best, S.streak); addStar(); } save();
+          track('answer', { stage: S.stage, q: String(en || ko || '').slice(0, 80), ok: first, first: true });
           if (o.sayIt !== false && /[a-z]/i.test(c)) speak(c.replace(/<[^>]+>/g, ''), o.me ? '나' : who);
           if (o.after) { ui.ko.style.display = 'block'; ui.ko.textContent = o.after; }
           setTimeout(() => { dlgChoiceKeys = null; res(first); }, o.wait || 1100);
@@ -518,7 +522,7 @@ function orderTask(who, en, ko, seq, labels) {
       const b = document.createElement('button'); b.className = 'choice small'; b.textContent = w; b.dataset.i = seq.indexOf(w);
       b.onclick = () => {
         if (w === seq[idx]) { beep('get'); speak(labels ? labels(w) : w, '나'); b.remove(); const s = document.createElement('span'); s.className = 'chip'; s.textContent = w; ans.appendChild(s); idx++;
-          if (idx === seq.length) { S.tries++; if (!mistakes) { S.correct++; addStar(2); } save(); beep('star'); setTimeout(res, 900); }
+          if (idx === seq.length) { S.tries++; if (!mistakes) { S.correct++; addStar(2); } save(); track('answer', { stage: S.stage, q: String(en).slice(0, 80), ok: !mistakes, first: true }); beep('star'); setTimeout(res, 900); }
         } else { mistakes++; beep('bad'); b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 400); }
       };
       pool.appendChild(b);
@@ -560,7 +564,7 @@ function resetWorld() {
   refreshHUD();
 }
 function startStage(i) { S.stage = i; save(); resetWorld(); STAGES[i].start(); refreshHUD(); }
-function nextStage() { closeDlg(); beep('star'); const i = S.stage + 1; showBanner(STAGES[S.stage].title + ' 완료!', i < STAGES.length - 1 ? '다음: ' + STAGES[i].title : '모든 미션 완료!'); startStage(i); }
+function nextStage() { closeDlg(); beep('star'); track('stage_done', { stage: S.stage, stars: S.stars }); const i = S.stage + 1; showBanner(STAGES[S.stage].title + ' 완료!', i < STAGES.length - 1 ? '다음: ' + STAGES[i].title : '모든 미션 완료!'); startStage(i); }
 function showBanner(a, b) { const el = $('#banner'); el.innerHTML = `<b>${a}</b><span>${b}</span>`; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3000); }
 function mark(id, on = true) { NPC[id].g.userData.mark.visible = on; }
 function good(n = 1) { S.tries++; S.correct++; addStar(n); beep('star'); save(); }
@@ -889,6 +893,7 @@ function showEnd() {
   const acc = S.tries ? Math.round(S.correct / S.tries * 100) : 0;
   $('#endStats').innerHTML = `⭐ 별 <b>${S.stars}</b> · 한 번에 맞힌 비율 <b>${acc}%</b> · 최고 연속 <b>${S.best}</b> · ch 코인 <b>${S.th.length}/${L.th.length}</b>`;
   $('#endCard').innerHTML = S.card ? comicHTML(S.card) : '';
+  if (!showEnd.sent) { showEnd.sent = 1; track('finish', { stars: S.stars, correct: S.correct, tries: S.tries, best: S.best, card: S.card ? comicText(S.card).map(l => l[1]).join(' ') : '' }); }
 }
 $('#endClose').onclick = () => { $('#end').classList.remove('show'); closeDlg(); };
 
@@ -1098,6 +1103,8 @@ function begin(reset) {
   $('#title').classList.remove('show'); started = true;
   P.x = 0; P.z = 40; P.yaw = 0; P.pitch = 0;
   startStage(S.stage);
+  track('start', { stage: S.stage });
+  setInterval(() => track('state', { stage: S.stage, stars: S.stars, correct: S.correct, tries: S.tries, best: S.best }), 30000);
   NPC.bonus.talk = bethTalk;
   if (S.stage === 0) showBanner(STAGES[0].title, '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
   if (S.stage >= STAGES.length - 1) showEnd();

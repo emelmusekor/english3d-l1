@@ -1,6 +1,7 @@
 /* 동아출판 초등 영어 6 · Lesson 1 "I'm in the Sixth Grade" 학습 자료
    교사가 문장·단어를 바꾸고 싶으면 이 파일만 고치면 됩니다. */
 window.LESSON = {
+  id: 'L1',
   title: "Lesson 1 · I'm in the Sixth Grade",
   grades: ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'],
   gradeKo: { first: '1학년', second: '2학년', third: '3학년', fourth: '4학년', fifth: '5학년', sixth: '6학년' },

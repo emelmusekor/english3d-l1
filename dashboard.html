@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>영어 3D 학교 · 우리 반 현황</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .d-hide{display:none!important}
+  .d-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .d-grid .sec{margin:0}
+  .d-form label{display:block;font-size:15px;margin:8px 0 3px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
+  .d-form input[type=text],.d-form input[type=password]{width:100%;box-sizing:border-box;font-family:inherit;font-size:19px;padding:9px 11px;border-radius:12px;border:2px solid #cbd5e1;color:var(--ink)}
+  .d-form input:focus{outline:none;border-color:var(--teal)}
+  .d-code-in{text-transform:uppercase;letter-spacing:4px}
+  .d-check{display:flex;gap:6px;align-items:center;margin-top:8px;font-size:15px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
+  .d-btn{border:0;border-radius:12px;padding:10px 18px;font-family:'Jua',sans-serif;font-size:18px;background:var(--accent);color:#fff;cursor:pointer;margin:10px 6px 0 0}
+  .d-btn.alt{background:var(--teal)}
+  .d-btn.ghost{background:#eef2f6;color:var(--ink)}
+  .d-btn.small{padding:6px 12px;font-size:15px;margin:0 4px 0 0}
+  .d-btn.danger{background:#fff0f0;color:#c92a2a;border:2px solid #f5c2c2}
+  .d-btn:disabled{opacity:.55;cursor:wait}
+  .d-msg{min-height:1.3em;margin-top:8px;color:#c92a2a;font-size:15.5px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
+  .d-msg.good{color:var(--teal)}
+  .d-bigcode{font-family:'Jua',sans-serif;font-size:64px;letter-spacing:10px;color:var(--ink);background:#fffbe6;border:3px dashed var(--yellow);border-radius:18px;padding:6px 18px;display:inline-block;margin:6px 0}
+  .d-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .d-head h2{margin:0}
+  .d-codechip{font-family:'Jua',sans-serif;background:#fffbe6;border:2px dashed var(--yellow);border-radius:10px;padding:2px 10px;letter-spacing:3px;font-size:22px}
+  .d-state{display:inline-block;border-radius:999px;padding:2px 10px;font-size:14px;background:#e6fcf5;color:#087f5b;margin-left:6px;vertical-align:middle}
+  .d-state.off{background:#fff0f0;color:#c92a2a}
+  .d-sub{color:var(--muted);font-size:14.5px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
+  .d-tabs{display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap}
+  .d-tabs button{border:2px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 16px;font-family:'Jua',sans-serif;font-size:17px;color:var(--ink);cursor:pointer}
+  .d-tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .d-tabs .n{font-size:13px;opacity:.75;margin-left:4px}
+  table.d-tbl th{cursor:pointer;white-space:nowrap;user-select:none}
+  table.d-tbl th.nosort{cursor:default}
+  table.d-tbl th .ar{font-size:12px;opacity:.6}
+  table.d-tbl td{white-space:nowrap}
+  table.d-tbl td.wrap{white-space:normal;min-width:160px}
+  .d-bar{display:inline-block;width:60px;height:8px;background:#e5e7eb;border-radius:4px;vertical-align:middle;margin-right:6px;overflow:hidden}
+  .d-bar i{display:block;height:100%;background:var(--teal)}
+  .d-low{color:#c92a2a}
+  .d-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#cbd5e1;margin-right:5px;vertical-align:middle}
+  .d-dot.on{background:#2fb344}
+  .d-card{background:#fffbe6;border-radius:12px;padding:10px 14px;white-space:pre-wrap;font-family:'Gowun Dodum','Malgun Gothic',sans-serif;font-size:16px;line-height:1.6}
+  .d-nick{background:none;border:0;padding:0;font:inherit;color:var(--ink);cursor:pointer;text-decoration:underline dotted}
+  .d-empty{color:var(--muted);text-align:center;padding:18px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
+  .d-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .d-copy{margin-left:8px}
+  ol.d-miss{margin:0;padding-left:22px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif;font-size:16.5px}
+  ol.d-miss li{margin:4px 0}
+  ol.d-miss .en{font-size:17px}
+</style>
+</head>
+<body class="doc">
+<div class="wrap">
+  <div class="top">
+    <h1>📊 우리 반 현황</h1>
+    <div><a href="./">🎮 게임</a> <a class="alt" href="teacher.html">🧑‍🏫 선생님 화면</a></div>
+  </div>
+
+  <!-- 서버 주소가 없을 때 -->
+  <div class="sec d-hide" id="noSetup">
+    <h2>⚙️ 먼저 준비가 필요해요</h2>
+    <p>우리 반 기록을 모으려면 <b>구글 시트 + Apps Script</b>를 한 번 연결해야 해요. 10분쯤 걸려요.</p>
+    <ol>
+      <li>구글 시트를 새로 만들고 <b>확장 프로그램 → Apps Script</b>를 열어요.</li>
+      <li><b>Code.gs</b> 내용을 붙여 넣고 <b>setup</b>을 한 번 실행해요.</li>
+      <li><b>배포 → 새 배포 → 웹 앱</b> (실행: 나, 액세스: 모든 사용자)으로 배포해요.</li>
+      <li>받은 주소를 사이트의 <b>net-config.js</b>에 넣고 올려요.</li>
+    </ol>
+    <p>👉 자세한 안내는 English_3D 폴더의 <b>backend/README.md</b>에 있어요.</p>
+    <p class="d-sub">연결 전에도 게임은 학생 기기에서 그대로 할 수 있어요. 학생 기기 기록은 <a href="teacher.html">선생님 화면</a> 맨 아래에서 볼 수 있어요.</p>
+  </div>
+
+  <!-- 들어가기 -->
+  <div class="d-grid d-hide" id="login">
+    <div class="sec">
+      <h2>🔑 우리 반 열기</h2>
+      <form class="d-form" id="fOpen" autocomplete="off">
+        <label for="oCode">반 코드 (5글자)</label>
+        <input type="text" id="oCode" class="d-code-in" maxlength="5" placeholder="ABCDE" spellcheck="false">
+        <label for="oPin">PIN (숫자 6~8자리)</label>
+        <input type="password" id="oPin" maxlength="8" inputmode="numeric" placeholder="••••••">
+        <label class="d-check"><input type="checkbox" id="oRemember"> 이 기기에서 기억하기 (공용 컴퓨터는 체크하지 마세요)</label>
+        <button class="d-btn alt" id="oGo" type="submit">열기</button>
+        <div class="d-msg" id="oMsg"></div>
+      </form>
+    </div>
+    <div class="sec">
+      <h2>✨ 새 반 만들기</h2>
+      <form class="d-form" id="fNew" autocomplete="off">
+        <label for="nName">반 이름 (학교 이름은 빼고요)</label>
+        <input type="text" id="nName" maxlength="20" placeholder="예: 6학년 3반">
+        <label for="nPin">PIN 정하기 (숫자 6~8자리)</label>
+        <input type="password" id="nPin" maxlength="8" inputmode="numeric" placeholder="••••••">
+        <label for="nPin2">PIN 한 번 더</label>
+        <input type="password" id="nPin2" maxlength="8" inputmode="numeric" placeholder="••••••">
+        <button class="d-btn" id="nGo" type="submit">반 만들기</button>
+        <div class="d-msg" id="nMsg"></div>
+        <p class="d-sub">PIN은 선생님만 알고 있어요. 잊으면 다시 찾을 수 없으니 꼭 적어 두세요.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- 방금 만든 반 -->
+  <div class="sec d-hide" id="made">
+    <h2>🎉 반을 만들었어요!</h2>
+    <p><b id="mName"></b> 반 코드예요. 학생들에게 알려 주세요.</p>
+    <div><span class="d-bigcode" id="mCode"></span><button class="d-btn ghost small d-copy" id="mCopy" type="button">📋 복사</button></div>
+    <p class="d-sub">학생은 게임 시작 화면의 <b>🏫 우리 반으로 참여하기</b>를 눌러 반 코드·번호·별명을 적어요.</p>
+    <p class="d-sub">바로 들어가는 주소: <span id="mLink"></span> <button class="d-btn ghost small" id="mLinkCopy" type="button">📋 주소 복사</button></p>
+    <button class="d-btn alt" id="mOpen" type="button">이 반 현황 보기</button>
+  </div>
+
+  <!-- 현황 -->
+  <div class="d-hide" id="board">
+    <div class="sec">
+      <div class="d-head">
+        <div>
+          <h2><span id="bName"></span> <span class="d-codechip" id="bCode"></span><span class="d-state" id="bState"></span></h2>
+          <div class="d-sub" id="bSync"></div>
+        </div>
+        <div class="d-tools">
+          <button class="d-btn ghost small" id="bRefresh" type="button">🔄 새로 고침</button>
+          <button class="d-btn ghost small" id="bCsv" type="button">⬇️ CSV</button>
+          <button class="d-btn ghost small" id="bLinks" type="button">🔗 학생 주소</button>
+          <button class="d-btn ghost small" id="bOut" type="button">↩ 나가기</button>
+        </div>
+      </div>
+      <div class="d-sub d-hide" id="bLinkBox" style="margin-top:8px"></div>
+      <div class="d-tabs" id="tabs"></div>
+      <div class="stat" id="stats" style="margin-top:10px"></div>
+      <div class="d-msg" id="bMsg"></div>
+    </div>
+
+    <div class="sec">
+      <h2>❗ 많이 틀린 문제 TOP 5</h2>
+      <div id="miss"></div>
+    </div>
+
+    <div class="sec">
+      <h2>👩‍🎓 학생별 기록</h2>
+      <p class="d-sub">표 머리를 누르면 정렬돼요. 별명을 누르면 글쓰기 카드가 보여요. 정답률은 <b>처음에 바로 맞힌 비율</b>이에요.</p>
+      <div class="tblwrap"><table class="d-tbl" id="tbl"></table></div>
+    </div>
+
+    <div class="sec">
+      <h2>🛠 반 관리</h2>
+      <p class="d-sub">반을 닫으면 새 학생이 들어오지 못하고 기록도 더 받지 않아요. 지운 기록은 되살릴 수 없어요.</p>
+      <button class="d-btn ghost" id="bToggle" type="button"></button>
+      <button class="d-btn danger" id="bDelete" type="button">🗑 반 지우기 (모든 기록 삭제)</button>
+    </div>
+  </div>
+</div>
+
+<script src="net-config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var EP = '';
+  try { EP = String((window.NET_CONFIG && window.NET_CONFIG.endpoint) || '').trim(); } catch (e) {}
+  var KEY = 'english3d_teacher';
+  var LESSONS = { L1: 'Lesson 1', L2: 'Lesson 2', L3: 'Lesson 3' };
+  var STAGE_NAMES = {
+    L1: ['새 친구를 만나요', '교실을 찾아 줘요', '동아리 축제', '문장 블록', '세계 어린이 모임', '나를 소개해요']
+  };
+  var REFRESH_MS = 20000;
+  var ACTIVE_MS = 5 * 60 * 1000;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var show = function (id, on) { $(id).classList.toggle('d-hide', !on); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); };
+
+  var sess = null;        // { code, pin }
+  var data = null;        // 마지막 dashboard 응답
+  var fetchedAt = 0;
+  var lesson = 'L1';
+  var sortKey = 'num', sortDir = 1;
+  var openCards = {};
+  var timer = null, busy = false;
+
+  if (!EP) { show('noSetup', true); return; }
+  show('login', true);
+
+  // ---------------------------------------------------------- 서버
+  function call(body) {
+    return fetch(EP, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { ok: false, error: 'network', msg: '서버에 연결하지 못했어요. 인터넷과 설정 주소를 확인해 주세요.' }; });
+  }
+  function msg(id, text, good) { var m = $(id); m.textContent = text || ''; m.className = 'd-msg' + (good ? ' good' : ''); }
+
+  // ---------------------------------------------------------- 기억하기
+  function loadSess() {
+    try { return JSON.parse(sessionStorage.getItem(KEY)) || JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  }
+  function saveSess(s, remember) {
+    try {
+      sessionStorage.setItem(KEY, JSON.stringify(s));
+      if (remember) localStorage.setItem(KEY, JSON.stringify(s)); else localStorage.removeItem(KEY);
+    } catch (e) {}
+  }
+  function clearSess() { try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch (e) {} }
+
+  // ---------------------------------------------------------- 반 열기
+  $('oCode').addEventListener('input', function () { this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); });
+  $('fOpen').onsubmit = function (e) {
+    e.preventDefault();
+    var code = $('oCode').value.trim().toUpperCase(), pin = $('oPin').value.trim();
+    if (code.length !== 5) return msg('oMsg', '반 코드 5글자를 적어 주세요.');
+    if (!/^\d{6,8}$/.test(pin)) return msg('oMsg', 'PIN은 숫자 6~8자리예요.');
+    $('oGo').disabled = true; msg('oMsg', '여는 중…', true);
+    open({ code: code, pin: pin }, $('oRemember').checked, function (ok, res) {
+      $('oGo').disabled = false;
+      if (!ok) msg('oMsg', res.msg || '열지 못했어요.');
+      else { msg('oMsg', ''); $('oPin').value = ''; }
+    });
+  };
+
+  function open(s, remember, cb) {
+    call({ action: 'dashboard', code: s.code, pin: s.pin }).then(function (res) {
+      if (!res.ok) { cb && cb(false, res); return; }
+      sess = s; saveSess(s, remember);
+      data = res; fetchedAt = Date.now();
+      var ls = Object.keys(res.lessons || {});
+      if (!res.lessons[lesson] && ls.length) {
+        lesson = ls.sort(function (a, b) { return res.lessons[b].students.length - res.lessons[a].students.length; })[0];
+      }
+      show('login', false); show('made', false); show('board', true);
+      render();
+      startTimer();
+      cb && cb(true, res);
+    });
+  }
+
+  // ---------------------------------------------------------- 새 반
+  $('fNew').onsubmit = function (e) {
+    e.preventDefault();
+    var name = $('nName').value.replace(/[<>]/g, '').trim(), pin = $('nPin').value.trim();
+    if (!name) return msg('nMsg', '반 이름을 적어 주세요.');
+    if (!/^\d{6,8}$/.test(pin)) return msg('nMsg', 'PIN은 숫자 6~8자리로 정해 주세요.');
+    if (pin !== $('nPin2').value.trim()) return msg('nMsg', '두 PIN이 달라요. 다시 적어 주세요.');
+    if (/^(\d)\1+$/.test(pin) || '0123456789012345'.indexOf(pin) >= 0 || '9876543210987654'.indexOf(pin) >= 0) return msg('nMsg', '너무 쉬운 PIN이에요. 다른 숫자로 정해 주세요.');
+    $('nGo').disabled = true; msg('nMsg', '만드는 중…', true);
+    call({ action: 'createClass', name: name, pin: pin }).then(function (res) {
+      $('nGo').disabled = false;
+      if (!res.ok) return msg('nMsg', res.msg || '만들지 못했어요.');
+      msg('nMsg', '');
+      $('nPin').value = ''; $('nPin2').value = '';
+      $('mName').textContent = res.name; $('mCode').textContent = res.code;
+      var link = studentLink(res.code, 'L1');
+      $('mLink').textContent = link;
+      $('mCopy').onclick = function () { copy(res.code, this); };
+      $('mLinkCopy').onclick = function () { copy(link, this); };
+      $('mOpen').onclick = function () { open({ code: res.code, pin: pin }, false); };
+      show('made', true);
+      $('made').scrollIntoView({ behavior: 'smooth' });
+    });
+  };
+
+  function studentLink(code, L) {
+    var base = new URL('./', location.href).href;
+    return base + (L === 'L1' ? '' : L.toLowerCase() + '/') + '?class=' + code;
+  }
+  function copy(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = '✅ 복사했어요'; setTimeout(function () { btn.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { prompt('복사해 주세요', text); });
+    else prompt('복사해 주세요', text);
+  }
+
+  // ---------------------------------------------------------- 새로 고침
+  function refresh() {
+    if (!sess || busy) return;
+    busy = true;
+    call({ action: 'dashboard', code: sess.code, pin: sess.pin }).then(function (res) {
+      busy = false;
+      if (res.ok) { data = res; fetchedAt = Date.now(); msg('bMsg', ''); render(); return; }
+      if (res.error === 'pin' || res.error === 'noclass' || res.error === 'locked') { logout(res.msg); return; }
+      msg('bMsg', res.msg || '새로 고침을 못 했어요. 잠시 뒤 다시 할게요.');
+      syncLine();
+    });
+  }
+  function startTimer() {
+    clearInterval(timer);
+    timer = setInterval(function () { if (document.visibilityState === 'visible') refresh(); else syncLine(); }, REFRESH_MS);
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && sess && Date.now() - fetchedAt > REFRESH_MS) refresh(); });
+  function logout(text) {
+    clearInterval(timer); sess = null; data = null; clearSess();
+    show('board', false); show('login', true);
+    msg('oMsg', text || '');
+  }
+
+  // ---------------------------------------------------------- 그리기
+  function nowServer() { return data ? data.now + (Date.now() - fetchedAt) : Date.now(); }
+  function ago(t) {
+    if (!t) return '-';
+    var s = Math.max(0, Math.round((nowServer() - t) / 1000));
+    if (s < 60) return '방금';
+    if (s < 3600) return Math.floor(s / 60) + '분 전';
+    if (s < 86400) return Math.floor(s / 3600) + '시간 전';
+    var d = new Date(t);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+  function stageText(L, st) {
+    if (st >= 6) return '✅ 모두 완료';
+    var names = STAGE_NAMES[L];
+    return (st + 1) + '번째 미션' + (names && names[st] ? ' · ' + names[st] : '');
+  }
+  function syncLine() {
+    if (!data) return;
+    var t = new Date(fetchedAt);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    $('bSync').textContent = '20초마다 저절로 새로 고쳐요 · 마지막 ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
+  }
+
+  function render() {
+    if (!data) return;
+    var c = data.cls;
+    $('bName').textContent = c.name;
+    $('bCode').textContent = c.code;
+    $('bState').textContent = c.open ? '참여 받는 중' : '닫힘';
+    $('bState').className = 'd-state' + (c.open ? '' : ' off');
+    $('bToggle').textContent = c.open ? '🔒 반 닫기' : '🔓 반 다시 열기';
+    syncLine();
+
+    // 탭
+    var keys = Object.keys(LESSONS);
+    Object.keys(data.lessons).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+    $('tabs').innerHTML = keys.map(function (k) {
+      var n = data.lessons[k] ? data.lessons[k].students.length : 0;
+      return '<button type="button" data-l="' + esc(k) + '" class="' + (k === lesson ? 'on' : '') + '">' + esc(LESSONS[k] || k) + '<span class="n">' + n + '명</span></button>';
+    }).join('');
+
+    var D = data.lessons[lesson] || { summary: { participants: 0, active: 0, done: 0, avgAcc: null, avgStars: 0 }, students: [], topMissed: [] };
+    var sm = D.summary;
+    var now = nowServer();
+    var active = D.students.filter(function (s) { return now - s.lastSeen <= ACTIVE_MS; }).length;
+    $('stats').innerHTML = [
+      ['👩‍🎓 참여 학생', sm.participants + '명'],
+      ['🟢 최근 5분 활동', active + '명'],
+      ['🎯 평균 정답률', sm.avgAcc == null ? '-' : sm.avgAcc + '%'],
+      ['⭐ 평균 별', sm.avgStars],
+      ['✅ 모두 완료', sm.done + '명']
+    ].map(function (i) { return '<div><b>' + esc(i[1]) + '</b>' + esc(i[0]) + '</div>'; }).join('');
+
+    // 많이 틀린 문제
+    $('miss').innerHTML = D.topMissed.length
+      ? '<ol class="d-miss">' + D.topMissed.map(function (m) {
+          return '<li><span class="en">' + esc(m.q) + '</span> <span class="d-sub">— ' + m.students + '명이 틀림 · 모두 ' + m.wrong + '번</span></li>';
+        }).join('') + '</ol>'
+      : '<div class="d-empty">아직 틀린 문제가 없어요.</div>';
+
+    renderTable(D.students, now);
+  }
+
+  var COLS = [
+    ['num', '번호'], ['nick', '별명'], ['stage', '진행 단계'], ['stars', '별'], ['acc', '정답률'],
+    ['best', '최고 연속'], ['lastSeen', '마지막 활동'], ['weak', '약한 문제', true], ['x', '', true]
+  ];
+  function renderTable(list, now) {
+    var rows = list.slice().sort(function (a, b) {
+      var x = a[sortKey], y = b[sortKey];
+      if (sortKey === 'acc') { x = x == null ? -1 : x; y = y == null ? -1 : y; }
+      if (typeof x === 'string') return x.localeCompare(y, 'ko') * sortDir;
+      return ((x || 0) - (y || 0)) * sortDir || a.num - b.num;
+    });
+    var head = '<tr>' + COLS.map(function (c) {
+      if (c[2]) return '<th class="nosort">' + c[1] + '</th>';
+      var ar = sortKey === c[0] ? (sortDir > 0 ? ' ▲' : ' ▼') : '';
+      return '<th data-k="' + c[0] + '">' + c[1] + '<span class="ar">' + ar + '</span></th>';
+    }).join('') + '</tr>';
+    if (!rows.length) {
+      $('tbl').innerHTML = head + '<tr><td colspan="' + COLS.length + '" class="d-empty">아직 참여한 학생이 없어요. 학생들에게 반 코드 <b>' + esc(data.cls.code) + '</b>를 알려 주세요.</td></tr>';
+      return;
+    }
+    $('tbl').innerHTML = head + rows.map(function (s) {
+      var acc = s.acc == null ? '-' : '<span class="d-bar"><i style="width:' + s.acc + '%"></i></span><span class="' + (s.acc < 60 ? 'd-low' : '') + '">' + s.acc + '%</span> <span class="d-sub">(' + s.correct + '/' + s.tries + ')</span>';
+      var on = now - s.lastSeen <= ACTIVE_MS;
+      var key = lesson + '|' + s.num;
+      var tr = '<tr>' +
+        '<td>' + s.num + '</td>' +
+        '<td><button type="button" class="d-nick" data-card="' + esc(key) + '">' + esc(s.nick) + '</button>' + (s.card ? ' ✏️' : '') + '</td>' +
+        '<td>' + esc(stageText(lesson, s.stage)) + '</td>' +
+        '<td>⭐ ' + s.stars + '</td>' +
+        '<td>' + acc + '</td>' +
+        '<td>' + s.best + '</td>' +
+        '<td><span class="d-dot' + (on ? ' on' : '') + '"></span>' + esc(ago(s.lastSeen)) + '</td>' +
+        '<td class="wrap">' + (s.weak.length ? s.weak.map(function (q) { return '<span class="tag">' + esc(q) + '</span>'; }).join(' ') : '<span class="d-sub">-</span>') + '</td>' +
+        '<td><button type="button" class="d-btn ghost small" data-kick="' + s.num + '" title="이 학생 기록 지우기">지우기</button></td>' +
+        '</tr>';
+      if (openCards[key]) {
+        tr += '<tr><td></td><td colspan="' + (COLS.length - 1) + '">' + (s.card ? '<div class="d-card">' + esc(s.card) + '</div>' : '<span class="d-sub">아직 글쓰기 카드가 없어요.</span>') + '</td></tr>';
+      }
+      return tr;
+    }).join('');
+  }
+
+  $('tabs').onclick = function (e) {
+    var b = e.target.closest('button[data-l]'); if (!b) return;
+    lesson = b.getAttribute('data-l'); render();
+  };
+  $('tbl').onclick = function (e) {
+    var th = e.target.closest('th[data-k]');
+    if (th) { var k = th.getAttribute('data-k'); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'num' || k === 'nick') ? 1 : -1; } render(); return; }
+    var nb = e.target.closest('[data-card]');
+    if (nb) { var key = nb.getAttribute('data-card'); openCards[key] = !openCards[key]; render(); return; }
+    var kb = e.target.closest('[data-kick]');
+    if (kb) {
+      var num = kb.getAttribute('data-kick');
+      if (!confirm(num + '번 학생의 ' + (LESSONS[lesson] || lesson) + ' 기록을 지울까요?\n(학생이 다시 게임을 하면 새로 쌓여요)')) return;
+      kb.disabled = true;
+      call({ action: 'kick', code: sess.code, pin: sess.pin, num: Number(num), lesson: lesson }).then(function (res) {
+        if (!res.ok) msg('bMsg', res.msg || '지우지 못했어요.');
+        refresh();
+      });
+    }
+  };
+
+  $('bRefresh').onclick = refresh;
+  $('bOut').onclick = function () { logout(''); };
+  $('bLinks').onclick = function () {
+    var box = $('bLinkBox');
+    if (!box.classList.contains('d-hide')) { show('bLinkBox', false); return; }
+    box.innerHTML = Object.keys(LESSONS).map(function (L) {
+      var u = studentLink(data.cls.code, L);
+      return '<div>' + esc(LESSONS[L]) + ': <a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(u) + '</a></div>';
+    }).join('') + '<div>주소로 들어가면 반 코드가 미리 들어가 있어요. 학생은 번호와 별명만 적으면 돼요.</div>';
+    show('bLinkBox', true);
+  };
+  $('bToggle').onclick = function () {
+    var to = !data.cls.open;
+    if (!to && !confirm('반을 닫을까요? 학생 기록을 더 받지 않아요.')) return;
+    call({ action: 'setOpen', code: sess.code, pin: sess.pin, open: to }).then(function (res) {
+      if (!res.ok) msg('bMsg', res.msg || '바꾸지 못했어요.');
+      refresh();
+    });
+  };
+  $('bDelete').onclick = function () {
+    var typed = prompt('반을 지우면 모든 학생 기록이 사라져요. 되돌릴 수 없어요.\n정말 지우려면 반 코드 ' + sess.code + ' 를 적어 주세요.');
+    if (typed == null) return;
+    if (typed.trim().toUpperCase() !== sess.code) { alert('반 코드가 달라서 지우지 않았어요.'); return; }
+    call({ action: 'deleteClass', code: sess.code, pin: sess.pin }).then(function (res) {
+      if (!res.ok) { msg('bMsg', res.msg || '지우지 못했어요.'); return; }
+      logout('반을 지웠어요.');
+      msg('oMsg', '반을 지웠어요.', true);
+    });
+  };
+
+  // ---------------------------------------------------------- CSV
+  $('bCsv').onclick = function () {
+    var D = data && data.lessons[lesson];
+    if (!D || !D.students.length) { msg('bMsg', '내려받을 기록이 없어요.'); return; }
+    var cell = function (v) { var s = String(v == null ? '' : v); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+    var lines = [['번호', '별명', '진행 단계', '별', '정답률(%)', '바로 맞힘', '푼 문제', '최고 연속', '마지막 활동', '약한 문제', '글쓰기']];
+    D.students.forEach(function (s) {
+      lines.push([s.num, s.nick, stageText(lesson, s.stage), s.stars, s.acc == null ? '' : s.acc, s.correct, s.tries, s.best,
+        s.lastSeen ? new Date(s.lastSeen).toLocaleString('ko-KR') : '', s.weak.join(' / '), s.card]);
+    });
+    var csv = '﻿' + lines.map(function (r) { return r.map(cell).join(','); }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    var d = new Date();
+    a.download = data.cls.name.replace(/[\\/:*?"<>|]/g, '') + '_' + lesson + '_' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  };
+
+  // ---------------------------------------------------------- 저장된 반 바로 열기
+  var saved = loadSess();
+  if (saved && saved.code && saved.pin) {
+    $('oCode').value = saved.code;
+    msg('oMsg', '여는 중…', true);
+    var remembered = false; try { remembered = !!localStorage.getItem(KEY); } catch (e) {}
+    $('oRemember').checked = remembered;
+    open(saved, remembered, function (ok, res) { if (!ok) { clearSess(); msg('oMsg', res.msg || ''); } else msg('oMsg', ''); });
+  }
+})();
+</script>
+</body>
+</html>
