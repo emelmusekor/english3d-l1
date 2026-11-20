@@ -58,20 +58,166 @@ function speak(text, who) {
 
 // ---------------- 3D 기본 ----------------
 const canvas = $('#c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// 그래픽 품질: high(그림자·고해상도) / low(가볍게). G 키로 바꿀 수 있고, 느리면 자동으로 low.
+const GFX = { high: true, auto: true };
+try { const q = new URLSearchParams(location.search).get('gfx') || localStorage.getItem('english3d_gfx'); if (q) { GFX.high = q === 'high'; GFX.auto = false; } } catch (e) {}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = GFX.high; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xbfe6ff);
-scene.fog = new THREE.Fog(0xbfe6ff, 45, 120);
-const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 300);
+scene.fog = new THREE.Fog(0xbfe6ff, 55, 160);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 420);
 camera.rotation.order = 'YXZ';
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
-scene.add(new THREE.HemisphereLight(0xffffff, 0x88aa66, 0.9));
-const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(30, 50, 20); scene.add(sun);
+const hemi = new THREE.HemisphereLight(0xe3f2ff, 0xc9bfa4, 1.35); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.0); sun.position.set(30, 50, 20);
+sun.castShadow = GFX.high; sun.shadow.mapSize.set(2048, 2048);
+{ const c = sun.shadow.camera; c.left = -38; c.right = 38; c.top = 38; c.bottom = -38; c.near = 1; c.far = 150; }
+sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
+scene.add(sun); scene.add(sun.target);
+const SUN_DIR = new THREE.Vector3(30, 50, 20).normalize();
 
 const mats = {};
-const mat = (c) => mats[c] || (mats[c] = new THREE.MeshLambertMaterial({ color: c }));
+const mat = (c) => mats[c] || (mats[c] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.88, metalness: 0 }));
+
+// ---------- 하늘·구름·먼 언덕 ----------
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color(0x4a90e2) }, bottom: { value: new THREE.Color(0xbfe6ff) } },
+  vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(vP.y * 1.7 + 0.04, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, pow(h, 0.75)), 1.0); }'
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(380, 32, 16), skyMat); sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
+const sunDisk = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,240,1)'); g.addColorStop(0.25, 'rgba(255,245,200,.9)'); g.addColorStop(1, 'rgba(255,240,200,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, fog: false, depthWrite: false, transparent: true, toneMapped: false }));
+  s.scale.set(60, 60, 1); scene.add(s); return s;
+})();
+const clouds = new THREE.Group(); scene.add(clouds);
+{
+  const cm = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdde8f5, emissiveIntensity: 0.55, roughness: 1, fog: false });
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2 + Math.random() * 0.3, r = 170 + Math.random() * 90, cl = new THREE.Group();
+    for (let k = 0; k < 5; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(7 + Math.random() * 6, 10, 8), cm); b.position.set(k * 8 - 16 + Math.random() * 4, Math.random() * 4, Math.random() * 6); b.scale.y = 0.6; cl.add(b); }
+    cl.position.set(Math.cos(a) * r, 60 + Math.random() * 35, Math.sin(a) * r); cl.lookAt(0, cl.position.y, 0); clouds.add(cl);
+  }
+  clouds.traverse(o => { o.userData.pol = 1; });
+}
+{
+  const hc = [0x6fae55, 0x5f9e4a, 0x7cbc62, 0x86b86a];
+  for (let i = 0; i < 30; i++) {
+    const a = i / 30 * Math.PI * 2, r = 105 + (i % 3) * 22;
+    const h = new THREE.Mesh(new THREE.SphereGeometry(26 + (i * 7) % 18, 14, 10), new THREE.MeshStandardMaterial({ color: hc[i % 4], roughness: 1 }));
+    h.position.set(Math.cos(a) * r, -12 - (i % 4) * 3, Math.sin(a) * r); h.scale.set(1.4, 0.75 + (i % 5) * 0.08, 1.2); h.userData.pol = 1; scene.add(h);
+  }
+}
+// 울타리 밖 풀숲
+{
+  const n = 900, im = new THREE.InstancedMesh(new THREE.ConeGeometry(0.18, 0.55, 5), new THREE.MeshStandardMaterial({ color: 0x5c9e43, roughness: 1 }), n);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r = 48 + Math.random() * 40, k = 0.7 + Math.random() * 0.9; v.set(Math.cos(a) * r, 0.25 * k, Math.sin(a) * r); sc.set(k, k, k); m4.compose(v, q, sc); im.setMatrixAt(i, m4); }
+  im.userData.pol = 1; scene.add(im);
+}
+// 풀밭 무늬 (원래 바닥 색을 바탕으로 만듦)
+const grassTex = {};
+function grassTexture(hex) {
+  if (grassTex[hex]) return grassTex[hex];
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  const base = new THREE.Color(hex); x.fillStyle = '#' + base.getHexString(); x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2600; i++) {
+    const t = base.clone().offsetHSL((Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.14);
+    x.fillStyle = '#' + t.getHexString(); x.fillRect(Math.random() * 256, Math.random() * 256, 1.5 + Math.random() * 2.5, 3 + Math.random() * 6);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(48, 48); t.anisotropy = 8;
+  return (grassTex[hex] = t);
+}
+const paveTex = {};
+function paveTexture(hex, w, h) {
+  const key = hex + '_' + w + '_' + h; if (paveTex[key]) return paveTex[key];
+  let t = paveTex['c' + hex];
+  if (!t) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    const base = new THREE.Color(hex); x.fillStyle = '#' + base.getHexString(); x.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 700; i++) { const k = base.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.06); x.fillStyle = '#' + k.getHexString(); x.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+    if (base.getHSL({}).l > 0.45) { x.strokeStyle = '#' + base.clone().offsetHSL(0, 0, -0.035).getHexString(); x.lineWidth = 2; x.strokeRect(1, 1, 126, 126); }
+    t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; paveTex['c' + hex] = t;
+  }
+  const tt = t.clone(); tt.needsUpdate = true; tt.repeat.set(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
+  return (paveTex[key] = tt);
+}
+// 장면 다듬기: 그림자 켜기, 글자판은 색 그대로, 큰 바닥에 풀 무늬
+function polish(root) {
+  root.traverse(o => {
+    if (o.userData.pol) return; o.userData.pol = 1;
+    if (o.isSprite) { o.material.toneMapped = false; return; }
+    if (!o.isMesh || o === sky || o.isInstancedMesh || o.isPoints) return;
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    let basic = false;
+    for (const m of ms) if (m.isMeshBasicMaterial) { m.toneMapped = false; basic = true; }
+    if (basic) return;
+    const g = o.geometry, p = (g && g.parameters) || {};
+    const flat = g && g.type === 'PlaneGeometry';
+    if (flat && p.width >= 200 && !o.userData.grass && o.material.color && !o.material.map) {
+      o.material = new THREE.MeshStandardMaterial({ map: grassTexture(o.material.color.getHex()), roughness: 1 }); o.userData.grass = 1;
+    } else if (flat && p.width * p.height >= 300 && o.material.color && !o.material.map && !o.material.transparent && Math.abs(o.rotation.x + Math.PI / 2) < 0.01) {
+      o.material = new THREE.MeshStandardMaterial({ map: paveTexture(o.material.color.getHex(), p.width, p.height), roughness: 0.95 });
+    }
+    o.receiveShadow = true;
+    o.castShadow = !flat && !ms[0].transparent && !(p.radius > 20);
+  });
+}
+function setQuality(high, why) {
+  GFX.high = high;
+  renderer.shadowMap.enabled = high; sun.castShadow = high;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 1.5 : 1)); resize();
+  scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
+  if (why) try { toast(high ? '🎨 그래픽: 선명하게 (G 키로 바꾸기)' : '🎨 그래픽: 가볍게 (G 키로 바꾸기)'); } catch (e) {}
+}
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyG' || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT'))) return;
+  GFX.auto = false; setQuality(!GFX.high, true);
+  try { localStorage.setItem('english3d_gfx', GFX.high ? 'high' : 'low'); } catch (er) {}
+});
+const fogBase = new THREE.Color(), skyTop = new THREE.Color(0x3f86d8), hsl = {};
+const perf = { t0: 0, frames: 0, done: false };
+let polishT = 1;
+function gfxTick(dt, now) {
+  sky.position.copy(camera.position);
+  fogBase.copy(scene.fog.color); fogBase.getHSL(hsl);
+  skyMat.uniforms.bottom.value.copy(fogBase);
+  skyMat.uniforms.top.value.copy(fogBase).lerp(skyTop, hsl.s > 0.3 ? 0.55 : 0.15);
+  sunDisk.position.copy(camera.position).addScaledVector(SUN_DIR, 300);
+  sunDisk.visible = hsl.l > 0.6 && hsl.s > 0.3;
+  clouds.rotation.y += dt * 0.004;
+  sun.position.set(P.x + SUN_DIR.x * 60, SUN_DIR.y * 60, P.z + SUN_DIR.z * 60); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
+  if ((polishT += dt) > 0.7) { polishT = 0; polish(scene); }
+  if (started && GFX.auto && !perf.done) {
+    if (!perf.t0) perf.t0 = now;
+    perf.frames++;
+    if (now - perf.t0 > 5000) { perf.done = true; const fps = perf.frames * 1000 / (now - perf.t0); if (fps < 28 && GFX.high) setQuality(false, true); }
+  }
+  animatePeople(now / 1000, dt);
+}
+function animatePeople(t, dt) {
+  if (typeof NPC === 'undefined') return;
+  for (const n of Object.values(NPC)) {
+    const a = n.g.userData.anim; if (!a || !n.g.visible) continue;
+    const p = n.g.position, step = a.lx === undefined ? 0 : Math.hypot(p.x - a.lx, p.z - a.lz), moving = step > 0.002 && step < 0.5;
+    a.lx = p.x; a.lz = p.z;
+    a.walk = moving ? Math.min(1, a.walk + dt * 6) : Math.max(0, a.walk - dt * 4);
+    const sw = Math.sin(t * 9 + a.ph) * 0.7 * a.walk, br = Math.sin(t * 2.2 + a.ph);
+    a.armL.rotation.x = sw; a.armR.rotation.x = -sw; a.legL.rotation.x = -sw * 0.8; a.legR.rotation.x = sw * 0.8;
+    a.armL.rotation.z = 0.1 + (1 - a.walk) * br * 0.03; a.armR.rotation.z = -0.1 - (1 - a.walk) * br * 0.03;
+    a.body.scale.set(1, 1 + br * 0.015, 0.85); a.head.position.y = a.hy + br * 0.008;
+    const bl = ((t + a.ph) % 4.2) < 0.13 ? 0.15 : 1; a.eyes.forEach(e => { e.scale.y = bl; });
+  }
+}
 function box(w, h, d, c, x, y, z, parent = scene) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c);
   m.position.set(x, y, z); parent.add(m); return m;
@@ -120,22 +266,33 @@ function textPlane(text, height, o, parent = scene) {
 // ---------------- 사람 ----------------
 function makePerson(o) {
   const g = new THREE.Group();
-  const skin = o.skin || 0xf5cfa8;
-  box(0.17, 0.72, 0.2, o.pants || 0x2f3e66, -0.11, 0.36, 0, g);
-  box(0.17, 0.72, 0.2, o.pants || 0x2f3e66, 0.11, 0.36, 0, g);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.78, 12), mat(o.shirt)); body.position.y = 1.08; g.add(body);
-  if (o.girl) { const sk = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.45, 12, 1, true), mat(o.skirt || o.shirt)); sk.position.y = 0.72; g.add(sk); }
-  const armL = box(0.12, 0.62, 0.14, o.shirt, -0.36, 1.08, 0, g); armL.rotation.z = 0.12;
-  const armR = box(0.12, 0.62, 0.14, o.shirt, 0.36, 1.08, 0, g); armR.rotation.z = -0.12;
-  ball(0.07, skin, -0.4, 0.75, 0, g); ball(0.07, skin, 0.4, 0.75, 0, g);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 14), mat(skin)); head.position.y = 1.72; g.add(head);
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.3, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(o.hair || 0x3b2a1a));
+  const skin = o.skin || 0xf5cfa8, pants = o.pants || 0x2f3e66, hairC = o.hair || 0x3b2a1a;
+  const cap = (r, l, c) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 4, 10), mat(c));
+  const legs = [-0.11, 0.11].map(x => {
+    const piv = new THREE.Group(); piv.position.set(x, 0.74, 0); g.add(piv);
+    const leg = cap(0.085, 0.5, pants); leg.position.y = -0.36; piv.add(leg);
+    box(0.16, 0.09, 0.26, 0x2b2b2b, 0, -0.69, 0.04, piv);
+    return piv;
+  });
+  const body = cap(0.26, 0.4, o.shirt); body.position.y = 1.08; body.scale.z = 0.85; g.add(body);
+  if (o.girl) { const sk = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.45, 14, 1, true), new THREE.MeshStandardMaterial({ color: o.skirt || o.shirt, roughness: 0.88, side: THREE.DoubleSide })); sk.position.y = 0.72; g.add(sk); }
+  cyl(0.07, 0.08, 0.12, skin, 0, 1.47, 0, g);
+  const arms = [-1, 1].map(sd => {
+    const piv = new THREE.Group(); piv.position.set(sd * 0.33, 1.36, 0); piv.rotation.z = sd * -0.1; g.add(piv);
+    const arm = cap(0.065, 0.44, o.shirt); arm.position.y = -0.28; piv.add(arm);
+    ball(0.075, skin, 0, -0.6, 0, piv);
+    return piv;
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 22, 16), mat(skin)); head.position.y = 1.72; g.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.3, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(hairC));
   hair.position.set(0, 1.74, -0.03); hair.rotation.x = -0.35; g.add(hair);
-  if (o.girl) { box(0.52, 0.5, 0.14, o.hair || 0x3b2a1a, 0, 1.55, -0.2, g); }
+  if (o.girl) { const lh = cap(0.21, 0.28, hairC); lh.position.set(0, 1.58, -0.17); lh.scale.z = 0.55; g.add(lh); }
   if (o.hat) { cyl(0.22, 0.24, 0.35, 0xffffff, 0, 2.1, 0, g); ball(0.27, 0xffffff, 0, 2.3, 0, g); }
-  ball(0.04, 0x111111, -0.1, 1.76, 0.25, g); ball(0.04, 0x111111, 0.1, 1.76, 0.25, g);
-  box(0.12, 0.03, 0.02, 0xc0504d, 0, 1.6, 0.27, g);
-  ball(0.05, 0xffb0a0, -0.17, 1.64, 0.22, g); ball(0.05, 0xffb0a0, 0.17, 1.64, 0.22, g);
+  ball(0.08, skin, -0.28, 1.72, 0, g); ball(0.08, skin, 0.28, 1.72, 0, g);
+  const eyes = [-0.1, 0.1].map(x => { const e = ball(0.042, 0x1a1a1a, x, 1.76, 0.25, g); ball(0.013, 0xffffff, 0.012, 0.018, 0.035, e); return e; });
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.012, 6, 14, Math.PI), mat(0xb5443f)); smile.position.set(0, 1.63, 0.265); smile.rotation.z = Math.PI; g.add(smile);
+  ball(0.05, 0xffb0a0, -0.17, 1.65, 0.22, g); ball(0.05, 0xffb0a0, 0.17, 1.65, 0.22, g);
+  g.userData.anim = { armL: arms[0], armR: arms[1], legL: legs[0], legR: legs[1], body, head, hy: 1.72, eyes, walk: 0, ph: Math.random() * 10 };
   const s = o.scale || 1; g.scale.setScalar(s);
   const tag = textSprite(o.name, 0.34 / s, { fs: 48, fg: '#1d3557' }); tag.position.y = 2.25 + (o.hat ? 0.4 : 0); g.add(tag);
   const mark = textSprite('!', 0.5 / s, { fs: 70, bg: '#ffd43b', fg: '#c92a2a', border: '#c92a2a', pad: 18 });
@@ -1007,6 +1164,7 @@ function update(dt, t) {
 function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
   update(dt, now / 1000);
+  gfxTick(dt, now);
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
