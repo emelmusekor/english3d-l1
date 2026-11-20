@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>영어 3D 마을 · Lesson 9</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="../style.css">
+<style>#writer .grid label.full{grid-column:1/-1}</style>
+</head>
+<body class="game">
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="pill">⭐ <span id="stars">0</span></div>
+  <div class="pill" id="questBox"><div id="stageName"></div><div id="objText">불러오는 중…</div></div>
+  <div class="btns">
+    <button id="koToggle" title="한글 도움말 켜기/끄기">한글 도움</button>
+    <button id="rateBtn" title="말하기 속도">🔊 보통</button>
+    <button id="mapBtn">🗺 지도</button>
+    <button id="helpBtn">❓</button>
+  </div>
+</div>
+<div id="nav"><div id="arrow"></div><div id="dist"></div></div>
+<div id="cross"></div>
+<div id="sentBar"></div>
+<div id="prompt"></div>
+<div id="held"></div>
+<div id="thBox" class="pill">🪙 ea <span id="thCount">0/6</span></div>
+<div id="toast"></div>
+<div id="banner"></div>
+<div id="mapBox"><canvas id="mapCanvas" width="400" height="400"></canvas></div>
+<div id="joy"><div id="knob"></div></div>
+<button id="actBtn">말 걸기</button>
+
+<div id="dlg">
+  <span id="dlgWho"></span>
+  <div id="dlgEn"></div>
+  <div id="dlgKo"></div>
+  <div id="dlgChoices"></div>
+  <div class="dlgRow">
+    <button id="dlgPeek">👀 글 보기</button>
+    <button id="dlgSpeak">🔊 다시 듣기 <span class="desk">(R)</span></button>
+    <button id="dlgNext">다음 ▶</button>
+  </div>
+</div>
+
+<!-- 시작 화면 -->
+<div class="overlay show" id="title">
+  <div class="panel">
+    <div class="sub">초등 영어 6 · Lesson 9</div>
+    <h1>I'm Going to Walk the Dog</h1>
+    <p>주말을 앞둔 <b>Weekend Town</b>에 왔어요!<br>친구들에게 <b>무엇을 할 계획인지</b> 묻고 답하고, <b>Have a good time!</b> 하고 기원해 보세요.</p>
+    <div class="keys">
+      <div class="desk"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키 이동</div>
+      <div class="desk">화면 클릭 → 마우스로 둘러보기<br><kbd>Esc</kbd> 마우스 풀기</div>
+      <div class="desk"><kbd>E</kbd> 또는 클릭: 말 걸기<br><kbd>Space</kbd> 다음 대사</div>
+      <div class="desk"><kbd>1</kbd>~<kbd>4</kbd> 답 고르기 · <kbd>R</kbd> 다시 듣기 · <kbd>Shift</kbd> 달리기</div>
+      <div>📱 태블릿: 왼쪽 손가락 이동, 오른쪽 손가락 둘러보기, <b>말 걸기</b> 버튼</div>
+      <div>🔊 소리를 켜 주세요! 친구들이 영어로 말해요.</div>
+    </div>
+    <button class="big" id="btnStart">시작하기</button>
+    <button class="big alt" id="btnContinue" style="display:none">이어하기</button>
+    <div class="links"><a href="guide.html">📖 기능 소개</a><a href="teacher.html">🧑‍🏫 선생님 화면</a><a href="../">Lesson 1</a><a href="../l8/">◀ Lesson 8</a><a href="../l10/">Lesson 10 ▶</a></div>
+  </div>
+</div>
+
+<!-- 도움말 -->
+<div class="overlay" id="help">
+  <div class="panel">
+    <h2>❓ 도움말</h2>
+    <p>🎯 화면 위의 <b>미션</b>을 읽고, 빨간 화살표와 <b>◆ 표시</b>를 따라가요.</p>
+    <p>❗ 머리 위에 느낌표가 있는 친구가 미션 친구예요. 다른 친구에게도 말을 걸면 영어로 말해요.</p>
+    <p>🔊 <b>다시 듣기</b>로 몇 번이든 다시 들을 수 있어요. 흐린 글자는 <b>👀 글 보기</b>를 누르면 보여요.</p>
+    <p>🇰🇷 <b>한글 도움</b>을 끄면 한국어 뜻이 숨겨져요. 자신 있으면 꺼 보세요!</p>
+    <p>🪙 마을 구석구석에 <b>ea 코인</b>이 숨어 있어요. 학교 가는 길의 Dean을 찾아가 보세요.</p>
+    <p>💾 진행 상황은 이 컴퓨터(브라우저)에 자동 저장돼요.</p>
+    <button class="big" id="helpClose">계속하기</button>
+  </div>
+</div>
+
+<!-- 아픈 친구와의 대화 글 -->
+<div class="overlay" id="writer">
+  <div class="panel">
+    <h2>✏️ Let's Write · 나의 주말 계획</h2>
+    <div class="grid">
+      <label class="full">내 이름 (영어) <input id="wMe" maxlength="20" placeholder="예: Minsu" autocomplete="off"></label>
+      <label>토요일 계획 1 (Sat.) <select id="wSat1"></select></label>
+      <label>토요일 계획 2 (…, too.) <select id="wSat2"></select></label>
+      <label>일요일 계획 1 (Sun.) <select id="wSun1"></select></label>
+      <label>일요일 계획 2 (…, too.) <select id="wSun2"></select></label>
+    </div>
+    <div id="wPreview"></div>
+    <div class="check">
+      <b>Checklist</b>
+      <label><input type="checkbox" id="chk1"> 주말 계획이 잘 드러나게 썼나요?</label>
+      <label><input type="checkbox" id="chk2"> 계획을 나타내는 표현을 바르게 썼나요?</label>
+      <label><input type="checkbox" id="chk3"> 문장 부호를 바르게 사용하고 띄어쓰기를 잘했나요?</label>
+    </div>
+    <button class="big ghost" id="wRead">🔊 소리 내어 듣기</button>
+    <button class="big" id="wDone">완성!</button>
+  </div>
+</div>
+
+<!-- 끝 -->
+<div class="overlay" id="end">
+  <div class="panel" style="text-align:center">
+    <h1>🎉 Lesson 9 완료!</h1>
+    <p id="endStats"></p>
+    <div id="endCard"></div>
+    <p>계속 마을을 돌아다니며 친구들과 이야기하거나, ea 코인을 모아 보세요.</p>
+    <button class="big" id="endClose">자유 탐험하기</button>
+  </div>
+</div>
+<div id="err"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="../net-config.js"></script>
+<script src="../net.js"></script>
+<script src="data.js"></script>
+<script>
+  // 글꼴을 먼저 불러온 뒤 3D 글자를 그려요
+  (function () {
+    var go = function () { var s = document.createElement('script'); s.src = 'game.js'; document.body.appendChild(s); };
+    var done = false, t;
+    var once = function () { if (done) return; done = true; clearTimeout(t); go(); };
+    if (document.fonts && document.fonts.load) document.fonts.load('40px Jua').then(once, once); else once();
+    t = setTimeout(once, 2500);
+  })();
+</script>
+</body>
+</html>
