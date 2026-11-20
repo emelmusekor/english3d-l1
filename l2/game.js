@@ -486,7 +486,7 @@ function ask(who, en, ko, choices, o = {}) {
     openDlg(); setLine(who, en, ko, Object.assign({ speak: !!o.speakQ, koAlways: true }, o));
     ui.next.style.display = 'none';
     let first = true;
-    const right = choices[0];
+    const right = o.right !== undefined ? o.right : choices[0];
     const order = o.noShuffle ? choices : shuffle(choices);
     const btns = order.map((c, i) => {
       const b = document.createElement('button'); b.className = 'choice'; if (c === right) b.dataset.r = 1; b.innerHTML = `<span class="num">${i + 1}</span>${c}`;
@@ -1123,7 +1123,7 @@ requestAnimationFrame(loop);
 // 테스트용: ?stage=N
 const qs = new URLSearchParams(location.search);
 if (qs.has('stage')) { S.stage = +qs.get('stage'); begin(false); }
-window.__game = { say, ask, tick: (dt) => update(dt, performance.now() / 1000), get S() { return S; }, P, NPC, startStage, items: () => items, zones, stallInfo, TBL, HOME, foodModel, get decor() { return decor; }, get st() { return stageState; }, get held() { return held; }, get busy() { return busy; } };
+window.__game = { say, ask, tick: (dt) => update(dt, performance.now() / 1000), get S() { return S; }, P, NPC, startStage, items: () => items, zones, HOME, stallInfo: typeof stallInfo !== 'undefined' ? stallInfo : null, get decor() { return decor; }, get st() { return stageState; }, get held() { return held; }, get busy() { return busy; } };
 if (qs.has('autotest')) { const s = document.createElement('script'); s.src = 'autotest.js'; document.body.appendChild(s); }
 })();
 // 개발용 화면 위치: ?view=x,z,yaw  /  ?dlg=1

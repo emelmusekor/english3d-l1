@@ -426,7 +426,7 @@ function ask(who, en, ko, choices, o = {}) {
     openDlg(); setLine(who, en, ko, Object.assign({ speak: !!o.speakQ, koAlways: true }, o));
     ui.next.style.display = 'none';
     let first = true;
-    const right = choices[0];
+    const right = o.right !== undefined ? o.right : choices[0];
     const order = o.noShuffle ? choices : shuffle(choices);
     const btns = order.map((c, i) => {
       const b = document.createElement('button'); b.className = 'choice'; if (c === right) b.dataset.r = 1; b.innerHTML = `<span class="num">${i + 1}</span>${c}`;
