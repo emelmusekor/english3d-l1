@@ -134,3 +134,44 @@ th{background:#f1f5f9;font-family:'Jua',sans-serif;font-weight:normal}
 .lessonPick a{background:#eef2f6;color:var(--ink);text-decoration:none;border-radius:10px;padding:5px 10px}
 .lessonPick a:hover{background:var(--teal);color:#fff}
 .lessonPick a.cur{background:var(--accent);color:#fff}
+
+/* ---------- 재미·도움 효과 ---------- */
+#fx{position:fixed;inset:0;pointer-events:none;z-index:35;overflow:hidden}
+.conf{position:absolute;top:-24px;width:10px;height:15px;border-radius:2px;animation:confFall linear forwards}
+@keyframes confFall{to{transform:translate(var(--dx),110vh) rotate(var(--rot))}}
+.flyStar{position:absolute;font-size:28px;transition:transform .75s cubic-bezier(.5,-.4,.7,1),opacity .75s}
+#praise{position:fixed;left:50%;top:215px;transform:translate(-50%,0);opacity:0;font-size:46px;color:#fff;text-shadow:0 3px 0 var(--accent),0 6px 14px rgba(0,0,0,.35);z-index:36;pointer-events:none;text-align:center;white-space:nowrap}
+#praise small{display:block;font-size:24px;color:var(--yellow);text-shadow:0 2px 0 var(--ink)}
+#praise.show{animation:praise 1.2s ease-out}
+@keyframes praise{0%{opacity:0;transform:translate(-50%,14px) scale(.5)}18%{opacity:1;transform:translate(-50%,0) scale(1.15)}32%{transform:translate(-50%,0) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-30px) scale(1)}}
+.choice.nudge{border-color:var(--yellow);animation:nudge 1s infinite}
+@keyframes nudge{50%{box-shadow:0 0 0 5px rgba(255,209,102,.55)}}
+#stageDots{display:flex;gap:4px;margin:1px 0 3px}
+#stageDots i{width:18px;height:6px;border-radius:3px;background:#dfe5ec}
+#stageDots i.on{background:var(--teal)}
+#stageDots i.now{background:var(--accent);animation:dotNow 1.2s infinite}
+@keyframes dotNow{50%{opacity:.45}}
+.edge{position:fixed;top:46%;font-size:54px;color:#ff3b6b;text-shadow:0 0 6px #fff,0 2px 6px rgba(0,0,0,.35);display:none;z-index:4;pointer-events:none;text-align:center;line-height:1}
+.edge small{display:block;font-size:15px;color:#fff;background:#ff3b6b;border-radius:8px;padding:2px 6px;text-shadow:none;margin-top:4px}
+.edge.l{left:14px;animation:edgeL .8s infinite}.edge.r{right:14px;animation:edgeR .8s infinite}
+.edge.show{display:block}
+@keyframes edgeL{50%{transform:translateX(-8px)}}
+@keyframes edgeR{50%{transform:translateX(8px)}}
+#coach{position:fixed;left:12px;bottom:64px;background:rgba(255,255,255,.95);border-radius:16px;padding:10px 14px 8px;z-index:7;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:16px;max-width:min(340px,80vw);border:3px solid var(--teal)}
+#coach>b{display:block;margin-bottom:4px;padding-right:26px}
+#coach div{padding:3px 0 3px 26px;position:relative;line-height:1.4}
+#coach div:before{content:'○';position:absolute;left:4px;color:#adb5bd}
+#coach div.ok{color:#868e96;text-decoration:line-through}
+#coach div.ok:before{content:'✔';color:var(--teal)}
+#coachX{position:absolute;right:6px;top:6px;border:0;background:#eef2f6;border-radius:8px;width:26px;height:26px;font-size:14px;color:var(--ink)}
+#sfxBtn{min-width:38px}
+#jumpBtn{position:fixed;right:116px;bottom:70px;width:62px;height:62px;border-radius:50%;border:0;background:rgba(29,53,87,.45);color:#fff;font-size:15px;display:none;z-index:8}
+body.touch #jumpBtn{display:block}
+.myRank{margin-top:12px;font-size:15px;color:var(--muted)}
+.myRank b{color:var(--accent)}
+.lessonPick a{position:relative;overflow:hidden}
+.lessonPick a.done{background:#d3f9d8;color:#2b8a3e}
+.lessonPick a.cur.done{background:var(--accent);color:#fff}
+.lessonPick a.ing i{position:absolute;left:0;bottom:0;height:4px;background:var(--teal)}
+@media (max-width:640px){#praise{font-size:34px}.edge{font-size:40px}#coach{font-size:14px;bottom:58px}}
+@media (prefers-reduced-motion:reduce){.edge.l,.edge.r,#stageDots i.now,.choice.nudge{animation:none}}

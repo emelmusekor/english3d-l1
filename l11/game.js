@@ -19,18 +19,66 @@ const track = (type, data) => { try { if (window.NET) window.NET.track(type, dat
 try { if (window.NET) window.NET.init({ lesson: L.id || 'L1' }); } catch (e) {}
 
 // ---------------- 소리 ----------------
-let AC = null;
+let AC = null, MUTE = false;
+try { MUTE = localStorage.getItem('english3d_mute') === '1'; } catch (e) {}
+const SFX = {
+  ok: [[660, .08], [880, .14]], bad: [[208, .1], [165, .16]], get: [[784, .06], [1046, .1]],
+  star: [[523, .07], [659, .07], [784, .07], [1046, .16]], combo: [[784, .06], [988, .06], [1175, .06], [1568, .2]],
+  jump: [[330, .05], [494, .08]], click: [[540, .035]], fanfare: [[523, .1], [659, .1], [784, .1], [1046, .14], [784, .08], [1046, .32]]
+};
 function beep(type) {
+  if (MUTE) return;
   try {
     AC = AC || new (window.AudioContext || window.webkitAudioContext)();
-    const seq = { ok: [[660, .08], [880, .12]], bad: [[220, .18]], get: [[784, .06], [1046, .1]], star: [[523, .07], [659, .07], [784, .07], [1046, .16]] }[type] || [[440, .1]];
+    if (AC.state === 'suspended' && AC.resume) AC.resume();
+    const seq = SFX[type] || [[440, .1]];
+    const vol = type === 'click' ? .05 : type === 'bad' ? .08 : type === 'jump' ? .06 : .12;
     let t = AC.currentTime;
     for (const [f, d] of seq) {
       const o = AC.createOscillator(), g = AC.createGain();
-      o.type = type === 'bad' ? 'square' : 'triangle'; o.frequency.value = f;
-      g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+      o.type = type === 'click' ? 'sine' : 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
       o.connect(g).connect(AC.destination); o.start(t); o.stop(t + d + .02); t += d;
     }
+  } catch (e) {}
+}
+// ---------- 축하 효과 (색종이·날아가는 별·칭찬 말) ----------
+const fxLayer = document.createElement('div'); fxLayer.id = 'fx'; document.body.appendChild(fxLayer);
+const praiseEl = document.createElement('div'); praiseEl.id = 'praise'; document.body.appendChild(praiseEl);
+const calm = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+function confetti(n = 40) {
+  if (calm) return;
+  try {
+    const cols = ['#ff6b6b', '#ffd166', '#06d6a0', '#4dabf7', '#f783ac', '#b197fc'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('i'); c.className = 'conf';
+      const dur = 1.6 + Math.random() * 1.6;
+      c.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-duration:${dur}s;animation-delay:${Math.random() * .5}s;--dx:${(Math.random() * 240 - 120) | 0}px;--rot:${(Math.random() * 1400 - 700) | 0}deg`;
+      if (i % 3 === 0) c.style.borderRadius = '50%';
+      fxLayer.appendChild(c); setTimeout(() => c.remove(), (dur + .6) * 1000);
+    }
+  } catch (e) {}
+}
+function flyStar(n = 1) {
+  if (calm) return;
+  try {
+    const r = document.getElementById('stars').getBoundingClientRect();
+    for (let i = 0; i < Math.min(n, 5); i++) {
+      const s = document.createElement('span'); s.className = 'flyStar'; s.textContent = '⭐';
+      const x0 = innerWidth / 2 + (Math.random() * 120 - 60), y0 = innerHeight * 0.55 + (Math.random() * 40 - 20);
+      s.style.left = x0 + 'px'; s.style.top = y0 + 'px'; fxLayer.appendChild(s);
+      setTimeout(() => { s.style.transform = `translate(${r.left + r.width / 2 - x0 - 14}px,${r.top + r.height / 2 - y0 - 14}px) scale(.5) rotate(360deg)`; s.style.opacity = '.3'; }, 30 + i * 90);
+      setTimeout(() => s.remove(), 900 + i * 90);
+    }
+  } catch (e) {}
+}
+const PRAISE = ['Great!', 'Nice!', 'Good job!', 'Excellent!', 'Perfect!', 'Wonderful!'];
+function praise(streak) {
+  try {
+    const hot = streak >= 3;
+    praiseEl.innerHTML = PRAISE[Math.random() * PRAISE.length | 0] + (hot ? `<small>🔥 ${streak}번 연속!</small>` : '');
+    praiseEl.classList.remove('show'); void praiseEl.offsetWidth; praiseEl.classList.add('show');
+    if (hot) { setTimeout(() => beep('combo'), 220); if (streak % 5 === 0) confetti(30); }
   } catch (e) {}
 }
 let voices = [];
@@ -524,7 +572,7 @@ function drawMapWorld(tx, tz, s) {
 window.__l11 = { PL, STOP, STALL };
 
 // ---------------- 플레이어 ----------------
-const P = { x: 0, z: 40, yaw: 0, pitch: 0, r: 0.4 };
+const P = { x: 0, z: 40, yaw: 0, pitch: 0, r: 0.4, jy: 0, vy: 0 };
 const keys = {};
 let locked = false, started = false, dlgOpen = false, busy = false, held = null;
 const touch = { mx: 0, mz: 0 };
@@ -609,16 +657,18 @@ const ui = {
   dlg: $('#dlg'), who: $('#dlgWho'), en: $('#dlgEn'), ko: $('#dlgKo'), ch: $('#dlgChoices'), next: $('#dlgNext'), spk: $('#dlgSpeak'), peek: $('#dlgPeek'),
   toast: $('#toast'), held: $('#held'), sent: $('#sentBar'), th: $('#thCount')
 };
+const stageDots = (() => { try { const d = document.createElement('div'); d.id = 'stageDots'; ui.stage.parentElement.insertBefore(d, ui.stage); return d; } catch (e) { return null; } })();
 function toast(msg, ms = 2200) { ui.toast.innerHTML = msg; ui.toast.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => ui.toast.classList.remove('show'), ms); }
 function refreshHUD() {
   ui.stars.textContent = S.stars;
   ui.stage.textContent = STAGES[Math.min(S.stage, STAGES.length - 1)].title;
+  if (stageDots) { let h = ''; for (let i = 0; i < STAGES.length - 1; i++) h += `<i class="${i < S.stage ? 'on' : i === S.stage ? 'now' : ''}"></i>`; stageDots.innerHTML = h; }
   ui.th.textContent = S.th.length + '/' + L.th.length;
   ui.held.style.display = held ? 'block' : 'none';
   if (held) ui.held.innerHTML = '들고 있는 것: <b>' + held.label + '</b>';
   $('#koToggle').classList.toggle('on', S.koHelp);
 }
-function addStar(n = 1) { S.stars += n; save(); refreshHUD(); ui.stars.parentElement.classList.remove('pop'); void ui.stars.offsetWidth; ui.stars.parentElement.classList.add('pop'); }
+function addStar(n = 1) { S.stars += n; save(); refreshHUD(); flyStar(n); ui.stars.parentElement.classList.remove('pop'); void ui.stars.offsetWidth; ui.stars.parentElement.classList.add('pop'); }
 
 let objective = { text: '', pos: null };
 function setObj(text, pos) { objective = { text, pos }; ui.obj.innerHTML = text; }
@@ -655,7 +705,7 @@ function ask(who, en, ko, choices, o = {}) {
   return new Promise(res => {
     openDlg(); setLine(who, en, ko, Object.assign({ speak: !!o.speakQ, koAlways: true }, o));
     ui.next.style.display = 'none';
-    let first = true;
+    let first = true, wrongs = 0;
     const right = o.right !== undefined ? o.right : choices[0];
     const order = o.noShuffle ? choices : shuffle(choices);
     const btns = order.map((c, i) => {
@@ -664,7 +714,7 @@ function ask(who, en, ko, choices, o = {}) {
         if (b.disabled) return;
         if (c === right) {
           b.classList.add('right'); btns.forEach(x => x.disabled = true); beep('ok');
-          S.tries++; if (first) { S.correct++; S.streak++; S.best = Math.max(S.best, S.streak); addStar(); } save();
+          S.tries++; if (first) { S.correct++; S.streak++; S.best = Math.max(S.best, S.streak); addStar(); praise(S.streak); } save();
           track('answer', { stage: S.stage, q: String(en || ko || '').slice(0, 80), ok: first, first: true });
           if (o.sayIt !== false && /[a-z]/i.test(c)) speak(c.replace(/<[^>]+>/g, ''), o.me ? '나' : who);
           if (o.after) { ui.ko.style.display = 'block'; ui.ko.textContent = o.after; }
@@ -673,6 +723,7 @@ function ask(who, en, ko, choices, o = {}) {
           b.classList.add('wrong'); b.disabled = true; beep('bad');
           if (first) { S.tries++; S.streak = 0; save(); } first = false;
           if (o.hint) { ui.ko.style.display = 'block'; ui.ko.textContent = '💡 ' + o.hint; }
+          if (++wrongs >= 2 && btns.length >= 4) btns.forEach(x => { if (x.dataset.r) x.classList.add('nudge'); });
         }
       };
       ui.ch.appendChild(b); return b;
@@ -1181,6 +1232,7 @@ let nearNPC = null;
 function interact() {
   if (dlgOpen || busy || !started || !nearNPC) return;
   const n = nearNPC;
+  coachDone('talk');
   busy = true;
   (async () => {
     try {
@@ -1203,7 +1255,9 @@ addEventListener('keydown', (e) => {
   }
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (['KeyE', 'Enter', 'Space'].includes(e.code)) interact();
+  if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'Space' && !nearNPC) jump();
+  else if (['KeyE', 'Enter', 'Space'].includes(e.code)) interact();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 let drag = null;
@@ -1244,6 +1298,42 @@ canvas.addEventListener('touchmove', (e) => {
 const endTouch = (e) => { for (const t of e.changedTouches) { if (t.identifier === joyId) { joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; knob.style.transform = ''; } if (t.identifier === lookId) lookId = null; } };
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
 $('#actBtn').addEventListener('click', interact);
+function jump() { if (!started || dlgOpen || P.jy > 0) return; P.vy = 5.2; P.jy = 0.001; beep('jump'); coachDone('jump'); }
+const jumpBtn = document.createElement('button'); jumpBtn.id = 'jumpBtn'; jumpBtn.textContent = '점프'; document.body.appendChild(jumpBtn);
+jumpBtn.addEventListener('click', jump);
+// 효과음 켜기/끄기 (M)
+const sfxBtn = document.createElement('button'); sfxBtn.id = 'sfxBtn'; sfxBtn.title = '효과음 켜기/끄기 (M)';
+const sfxLabel = () => { sfxBtn.textContent = MUTE ? '🔇' : '🎵'; };
+function toggleMute() { MUTE = !MUTE; try { localStorage.setItem('english3d_mute', MUTE ? '1' : '0'); } catch (e) {} sfxLabel(); toast(MUTE ? '🔇 효과음 꺼짐 (영어 말소리는 그대로 나와요)' : '🎵 효과음 켜짐'); if (!MUTE) beep('ok'); }
+sfxBtn.onclick = toggleMute; sfxLabel();
+try { const bs = document.querySelector('.hud .btns'); bs.insertBefore(sfxBtn, $('#mapBtn')); } catch (e) {}
+document.addEventListener('click', (e) => { try { if (e.isTrusted && e.target.closest && e.target.closest('button:not(.choice),a')) beep('click'); } catch (er) {} });
+// 처음 한 번: 조작 연습 카드
+const coach = { el: null, done: {}, yaw0: 0, x0: 0, z0: 0 };
+function coachStart() {
+  try { if (localStorage.getItem('english3d_coach')) return; } catch (e) { return; }
+  const steps = isTouch
+    ? [['look', '오른쪽 화면을 밀어 둘러봐요'], ['move', '왼쪽 화면을 밀어 걸어요'], ['talk', '❗친구 옆에서 <b>말 걸기</b>를 눌러요']]
+    : [['look', '화면을 <b>클릭</b>하고 마우스로 둘러봐요'], ['move', '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 로 걸어요 (<kbd>Shift</kbd> 달리기)'], ['talk', '❗친구 옆에서 <kbd>E</kbd> 를 눌러요']];
+  const el = document.createElement('div'); el.id = 'coach';
+  el.innerHTML = '<b>🎮 이렇게 움직여요</b><button id="coachX" title="닫기">✕</button>' + steps.map(s => `<div data-k="${s[0]}">${s[1]}</div>`).join('');
+  document.body.appendChild(el); coach.el = el; coach.yaw0 = P.yaw; coach.x0 = P.x; coach.z0 = P.z; coach.turn = 0;
+  el.querySelector('#coachX').onclick = coachEnd;
+}
+function coachEnd() { if (!coach.el) return; coach.el.remove(); coach.el = null; try { localStorage.setItem('english3d_coach', '1'); } catch (e) {} }
+function coachDone(k) {
+  if (!coach.el || coach.done[k]) return;
+  const d = coach.el.querySelector(`[data-k="${k}"]`); if (!d) return;
+  coach.done[k] = 1; d.classList.add('ok');
+  if (coach.el.querySelectorAll('div.ok').length === coach.el.querySelectorAll('div').length) { toast('👍 조작 연습 끝! 빨간 화살표를 따라가요'); setTimeout(coachEnd, 1200); }
+}
+function coachTick() {
+  if (!coach.el) return;
+  coach.el.style.display = dlgOpen ? 'none' : 'block';
+  coach.turn += Math.abs(P.yaw - coach.yaw0); coach.yaw0 = P.yaw;
+  if (coach.turn > 0.8) coachDone('look');
+  if (Math.hypot(P.x - coach.x0, P.z - coach.z0) > 4) coachDone('move');
+}
 $('#prompt').addEventListener('click', interact);
 
 // 상단 버튼
@@ -1270,10 +1360,42 @@ function drawMap() {
 // ---------------- 목표 표시 ----------------
 const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), new THREE.MeshBasicMaterial({ color: 0xff3b6b }));
 scene.add(beacon);
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 26, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xff3b6b, transparent: true, opacity: 0.16, depthWrite: false }));
+scene.add(beam);
+const trail = new THREE.Group(); scene.add(trail);
+(() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.strokeStyle = '#fff'; x.lineWidth = 14; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(10, 46); x.lineTo(32, 18); x.lineTo(54, 46); x.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  for (let i = 0; i < 7; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7), new THREE.MeshBasicMaterial({ map: tex, color: 0xff3b6b, transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; trail.add(m);
+  }
+})();
+const edgeL = document.createElement('div'), edgeR = document.createElement('div');
+edgeL.className = 'edge l'; edgeL.innerHTML = '◀<small>이쪽!</small>'; edgeR.className = 'edge r'; edgeR.innerHTML = '▶<small>이쪽!</small>';
+document.body.appendChild(edgeL); document.body.appendChild(edgeR);
+function guideTick(t, p, d, rel) {
+  const on = !!p && started;
+  beam.visible = on && d > 6; trail.visible = on && d > 4;
+  const side = on && !dlgOpen && Math.abs(rel) > 0.75 ? (rel > 0 ? 1 : -1) : 0;
+  edgeL.classList.toggle('show', side === 1); edgeR.classList.toggle('show', side === -1);
+  if (!on) return;
+  beam.position.set(p[0], 13, p[1]);
+  trail.position.set(P.x, 0.13, P.z); trail.rotation.y = P.yaw + rel;
+  const ph = (t * 1.2) % 1;
+  trail.children.forEach((m, i) => {
+    const s = 3.4 + (i + ph) * 1.5;
+    m.visible = s < d - 1.8; m.position.z = -s;
+    m.material.opacity = Math.min(1, (i + ph) / 1.2, (7 - i - ph) / 2) * 0.7;
+  });
+}
 
 // ---------------- 메인 루프 ----------------
 let lastT = performance.now(), zoneNow = null, mapTick = 0;
 const SPEED = 5.5;
+let running = false;
 function update(dt, t) {
   if (started && !dlgOpen) {
     let fx = 0, fz = 0;
@@ -1283,14 +1405,18 @@ function update(dt, t) {
     if (keys.KeyQ) P.yaw += 2.2 * dt;
     fz -= touch.mz; fx += touch.mx;
     const len = Math.hypot(fx, fz);
+    running = len > 0 && !!(keys.ShiftLeft || keys.ShiftRight);
     if (len > 0) {
       const k = Math.min(1, len) / len * SPEED * (keys.ShiftLeft || keys.ShiftRight ? 1.7 : 1) * dt;
       const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
       P.x += (-sy * fz + cy * fx) * k; P.z += (-cy * fz - sy * fx) * k;
     }
     collide();
-  }
-  camera.position.set(P.x, 1.6 + (started ? Math.sin(t * 9) * 0.02 * Math.min(1, Math.hypot(touch.mx, touch.mz) + (keys.KeyW || keys.KeyS || keys.ArrowUp ? 1 : 0)) : 0), P.z);
+  } else running = false;
+  if (P.jy > 0) { P.jy += P.vy * dt; P.vy -= 15 * dt; if (P.jy <= 0) { P.jy = 0; P.vy = 0; } }
+  const fovT = running ? 77 : 70; if (Math.abs(camera.fov - fovT) > 0.05) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
+  coachTick();
+  camera.position.set(P.x, P.jy + 1.6 + (started ? Math.sin(t * 9) * 0.02 * Math.min(1, Math.hypot(touch.mx, touch.mz) + (keys.KeyW || keys.KeyS || keys.ArrowUp ? 1 : 0)) : 0), P.z);
   camera.rotation.y = P.yaw; camera.rotation.x = P.pitch;
   if (!started) { P.yaw = Math.sin(t * 0.1) * 0.6; }
 
@@ -1339,8 +1465,9 @@ function update(dt, t) {
     beacon.visible = true; beacon.position.set(p[0], 3.3 + Math.sin(t * 3) * 0.2, p[1]); beacon.rotation.y = t * 2;
     const dx = p[0] - P.x, dz = p[1] - P.z, d = Math.hypot(dx, dz);
     const ty = Math.atan2(-dx, -dz); let rel = ty - P.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-    ui.arrow.style.display = 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; ui.dist.textContent = Math.round(d) + 'm';
-  } else { beacon.visible = false; ui.arrow.style.display = 'none'; ui.dist.textContent = ''; }
+    ui.arrow.style.display = 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; ui.dist.textContent = d < 3 ? '도착!' : Math.round(d) + 'm';
+    guideTick(t, p, d, rel);
+  } else { guideTick(t, null, 0, 0); beacon.visible = false; ui.arrow.style.display = 'none'; ui.dist.textContent = ''; }
   if ((mapTick += dt) > 0.1) { mapTick = 0; drawMap(); }
 }
 function loop(now) {
@@ -1362,11 +1489,39 @@ function begin(reset) {
   NPC.bonus.talk = bethTalk;
   if (S.stage === 0) showBanner(STAGES[0].title, '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
   if (S.stage >= STAGES.length - 1) showEnd();
-  if (!isTouch) setTimeout(() => toast('화면을 한 번 클릭하면 마우스로 둘러볼 수 있어요 (Esc로 해제)', 3500), 3200);
+  coachStart();
+  if (!isTouch && !coach.el) setTimeout(() => toast('화면을 한 번 클릭하면 마우스로 둘러볼 수 있어요 (Esc로 해제)', 3500), 3200);
 }
 // resetWorld가 talk를 지우므로 보너스 대화 복구
 const _reset = resetWorld;
 resetWorld = function () { _reset(); NPC.bonus.talk = bethTalk; };
+// 단계가 넘어갈 때·끝났을 때 축하
+const _startStage = startStage;
+startStage = function (i) { const up = started && i > S.stage; _startStage(i); if (up) confetti(i >= STAGES.length - 1 ? 90 : 45); };
+const _showEnd = showEnd;
+showEnd = function () { const was = $('#end').classList.contains('show'); _showEnd(); if (!was) { confetti(110); setTimeout(() => beep('fanfare'), 500); } };
+// 시작 화면: 단원마다 얼마나 했는지 보여 주기
+(() => {
+  try {
+    let total = 0, done = 0;
+    document.querySelectorAll('.lessonPick a').forEach(a => {
+      const m = /^L(\d+)$/.exec(a.textContent.trim()); if (!m) return;
+      let s = null; try { s = JSON.parse(localStorage.getItem('english3d_l' + m[1] + '_v1')); } catch (e) {}
+      if (!s) return;
+      total += s.stars || 0;
+      if (s.stage >= 6) { done++; a.classList.add('done'); a.textContent += ' ✓'; a.title = '끝낸 단원 · 별 ' + (s.stars || 0) + '개'; }
+      else if (s.stage > 0 || s.stars > 0) { a.classList.add('ing'); a.title = '미션 ' + (s.stage + 1) + '/6 하는 중 · 별 ' + (s.stars || 0) + '개'; const b = document.createElement('i'); b.style.width = Math.max(12, s.stage / 6 * 100) + '%'; a.appendChild(b); }
+    });
+    const pick = document.querySelector('.lessonPick');
+    if (pick && total > 0) {
+      const rank = total < 20 ? '🌱 새싹 탐험가' : total < 60 ? '🥾 씩씩한 탐험가' : total < 120 ? '🧭 영어 모험가' : total < 200 ? '🏅 영어 달인' : '🏆 영어 챔피언';
+      const d = document.createElement('div'); d.className = 'myRank'; d.innerHTML = `<b>${rank}</b> · 모은 별 ⭐ ${total}개 · 끝낸 단원 ${done}/12`;
+      pick.parentElement.insertBefore(d, pick);
+    }
+    const hp = document.querySelector('#help .panel #helpClose');
+    if (hp) { const q = document.createElement('p'); q.innerHTML = '⌨️ <b>Space</b> 점프 · <b>Shift</b> 달리기 · <b>M</b> 효과음 · <b>G</b> 화질 바꾸기. 두 번 틀리면 정답이 살짝 반짝여요.'; hp.parentElement.insertBefore(q, hp); }
+  } catch (e) {}
+})();
 $('#btnStart').onclick = () => begin(true);
 $('#btnContinue').onclick = () => begin(false);
 if (S.stage > 0) { $('#btnContinue').style.display = 'inline-block'; $('#btnContinue').textContent = `이어하기 (${STAGES[Math.min(S.stage, STAGES.length - 1)].title})`; $('#btnStart').textContent = '처음부터'; }
