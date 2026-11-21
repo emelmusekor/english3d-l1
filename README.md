@@ -1,6 +1,6 @@
 # 영어 3D 학교 · Lesson 1 (I'm in the Sixth Grade)
 
-1인칭 3D 혼자 하는 영어 게임. 서버 없음, 정적 파일만.
+3D 영어 게임(내 캐릭터 보기 / 내 눈으로 보기, V 키). 서버 없음, 정적 파일만.
 
 - index.html : 게임 / guide.html : 기능 소개 / teacher.html : 선생님 화면(차시 연결·정답·이 기기 기록)
 - data.js : 학습 문장·단어 (여기만 고치면 내용 변경)
