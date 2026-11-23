@@ -13,7 +13,7 @@ const SAVE_KEY = 'english3d_l4_v1';
 const fresh = () => ({ v: 1, stage: 0, stars: 0, correct: 0, tries: 0, streak: 0, best: 0, th: [], card: null, koHelp: true, rate: 0.9, gems: 0, medals: [] });
 let S = fresh();
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.v === 1) S = Object.assign(fresh(), s); } catch (e) {}
-const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} };
+const save = () => { try { if (window.__e3dReloading) return; localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }; // 서버 기록을 내려받아 새로 여는 중에는 덮어쓰지 않아요
 // 반 활동 기록 (백엔드가 설정되지 않으면 아무 일도 하지 않아요)
 // 게임 안 알림: 게임성 층(fun.js)이 window 의 'e3d' 이벤트로 들어요 (미션 끝·정답·포탈 등)
 const fire = (type, data) => { try { window.dispatchEvent(new CustomEvent('e3d', { detail: { type, data } })); } catch (e) {} };
@@ -310,7 +310,7 @@ function animatePerson(g, t, dt, f) {
   const p = g.position, step = a.lx === undefined ? 0 : Math.hypot(p.x - a.lx, p.z - a.lz), moving = step > 0.002 && step < 0.5;
   a.lx = p.x; a.lz = p.z;
   // 멀리 있는 사람은 얼굴 부품을 숨기고 움직임 계산도 쉬어요
-  const far = Math.hypot(p.x - camera.position.x, p.z - camera.position.z) > (GFX.high ? 40 : 24);
+  const far = CAM.iso ? Math.hypot(p.x - P.x, p.z - P.z) > (GFX.high ? 46 : 30) : Math.hypot(p.x - camera.position.x, p.z - camera.position.z) > (GFX.high ? 40 : 24);
   if (far !== !!a.far) { a.far = far; a.eyes.forEach(e => { e.visible = !far; }); a.smile.visible = !far; if (far) { a.mouth.visible = false; a.walk = 0; a.armL.rotation.x = a.baseL; a.armR.rotation.x = a.baseR; a.legL.rotation.x = a.legR.rotation.x = 0; } }
   a.blob.visible = !GFX.high;
   if (far) return;
@@ -400,7 +400,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.3'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.4'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -1214,15 +1214,48 @@ function collide() {
     if (d < m && d > 1e-4) { P.x += dx / d * (m - d); P.z += dz / d * (m - d); }
   }
 }
-// ----- 보는 방법: 3인칭(내 캐릭터가 보여요) / 1인칭(내 눈으로). V 키나 🎥 버튼으로 바꿔요 -----
-const CAM = { third: true, d: 4, side: 0, zoom: 0, talkN: null, turn: 0, me: null, key: '', face: Math.PI, lx: 0, lz: 0, still: 0 };
-try { const q = new URLSearchParams(location.search).get('cam') || localStorage.getItem('english3d_view'); if (q) CAM.third = String(q) !== '1'; } catch (e) {}
+// ----- 보는 방법 세 가지: 3D 내 캐릭터 보기(3인칭) / 2.5D 위에서 보기(쿼터뷰) / 내 눈으로 보기(1인칭). V 키나 🎥 버튼으로 바꿔요 -----
+// CAM.third 는 '내 캐릭터가 보이는가'(3D·2.5D 둘 다 true), CAM.iso 는 2.5D 인가
+const CAM = { third: true, iso: false, isoK: 0, isoYaw: Math.PI / 4, isoT: 9, isoAge: 0, tx: null, tz: 0, hid: new Set(), pin: null, d: 4, side: 0, zoom: 0, talkN: null, turn: 0, me: null, key: '', face: Math.PI, lx: 0, lz: 0, still: 0 };
+try { const q = String(new URLSearchParams(location.search).get('cam') || localStorage.getItem('english3d_view') || ''); if (q === '1') CAM.third = false; else if (q === 'iso') CAM.iso = true; } catch (e) {}
 const camBtn = document.createElement('button'); camBtn.id = 'camBtn'; camBtn.title = '보는 방법 바꾸기 (V)';
-const camLabel = () => { camBtn.textContent = CAM.third ? '🎥' : '👀'; };
+const camLabel = () => { camBtn.textContent = CAM.iso ? '🗺️ 2.5D' : CAM.third ? '🎥 3D' : '👀 내 눈'; };
+function isoRestore() { for (const o of CAM.hid) { o.visible = true; o.userData.isoHid = 0; } CAM.hid.clear(); }
 function toggleView() {
-  CAM.third = !CAM.third; camLabel();
-  try { localStorage.setItem('english3d_view', CAM.third ? '3' : '1'); } catch (e) {}
-  try { toast(CAM.third ? '🎥 내 캐릭터가 보여요 (V 키로 바꾸기)' : '👀 내 눈으로 봐요 (V 키로 바꾸기)'); } catch (e) {}
+  // 3D → 2.5D → 내 눈 → 3D
+  if (CAM.iso) { CAM.iso = false; CAM.third = false; isoRestore(); P.pitch = 0; }
+  else if (CAM.third) { CAM.iso = true; CAM.isoK = Math.round((P.yaw - Math.PI / 4) / (Math.PI / 2)); CAM.isoYaw = Math.PI / 4 + CAM.isoK * Math.PI / 2; CAM.tx = null; CAM.isoAge = 0; CAMOCC.t = 9; if (document.pointerLockElement) document.exitPointerLock(); }
+  else { CAM.third = true; }
+  camLabel();
+  try { localStorage.setItem('english3d_view', CAM.iso ? 'iso' : CAM.third ? '3' : '1'); } catch (e) {}
+  try { toast(CAM.iso ? '🗺️ <b>2.5D</b> 위에서 내려다봐요<br><small>W A S D 로 걷고, Q 로 화면을 돌려요 · V 로 바꾸기</small>' : CAM.third ? '🎥 <b>3D</b> 내 캐릭터 뒤에서 봐요 (V 로 바꾸기)' : '👀 내 눈으로 봐요 (V 로 바꾸기)', 3200); } catch (e) {}
+}
+// 2.5D: Q(또는 ←/→)로 화면을 90도씩 돌려요
+const isoBlink = document.createElement('div'); isoBlink.style.cssText = 'position:fixed;inset:0;background:#1d3557;opacity:0;pointer-events:none;z-index:3;transition:opacity .22s';
+document.body.appendChild(isoBlink);
+function isoTurn(k) { CAM.isoK += k; CAM.isoYaw = Math.PI / 4 + CAM.isoK * Math.PI / 2; isoBlink.style.transition = 'none'; isoBlink.style.opacity = '.45'; requestAnimationFrame(() => { isoBlink.style.transition = 'opacity .22s'; isoBlink.style.opacity = '0'; }); }
+addEventListener('keydown', (e) => { if (!CAM.iso || dlgOpen || e.repeat || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT'))) return; if (e.code === 'KeyQ' || e.code === 'ArrowLeft') isoTurn(1); else if (e.code === 'ArrowRight') isoTurn(-1); });
+// 2.5D: 머리 위를 덮는 것(지붕·나뭇잎·차양)은 그 밑에 있는 동안 숨겨서 안이 보이게 해요
+function isoTick(dt) {
+  if ((CAM.isoT += dt) < 0.12) return; CAM.isoT = 0;
+  const now = new Set();
+  try {
+    camRay.ray.origin.set(P.x, P.jy + 1.9, P.z); camRay.ray.direction.set(0, 1, 0); camRay.near = 0; camRay.far = 14;
+    for (const h of camRay.intersectObjects(CAMOCC.list, false)) {
+      let ok = true; for (let a = h.object; a; a = a.parent) if ((!a.visible && !a.userData.isoHid) || a.userData.halo) { ok = false; break; }
+      if (ok) now.add(h.object);
+    }
+    // 카메라와 나 사이를 가리는 지붕·나뭇잎·차양(땅에 닿지 않은 것)도 숨겨요. 벽은 그대로 두고 머리 위 ▼ 로 자리를 알려 줘요
+    const o0 = camera.position, dx = P.x - o0.x, dy = 0.35 - o0.y, dz = P.z - o0.z, len = Math.hypot(dx, dy, dz); // 발끝까지 보이게 발 쪽으로 쏴요
+    camRay.ray.origin.copy(o0); camRay.ray.direction.set(dx / len, dy / len, dz / len); camRay.near = 0; camRay.far = len - 0.4;
+    for (const h of camRay.intersectObjects(CAMOCC.list, false)) {
+      if (!(h.object.userData.camLowY >= 1.2)) continue;
+      let ok = true; for (let a = h.object; a; a = a.parent) if ((!a.visible && !a.userData.isoHid) || a.userData.halo) { ok = false; break; }
+      if (ok) now.add(h.object);
+    }
+  } catch (e) {}
+  for (const o of CAM.hid) if (!now.has(o)) { o.visible = true; o.userData.isoHid = 0; CAM.hid.delete(o); }
+  for (const o of now) if (!CAM.hid.has(o)) { o.visible = false; o.userData.isoHid = 1; CAM.hid.add(o); }
 }
 camBtn.onclick = toggleView; camLabel();
 try { const bs = document.querySelector('.hud .btns'); bs.insertBefore(camBtn, document.querySelector('#mapBtn')); } catch (e) {}
@@ -1240,7 +1273,7 @@ function camOccList() {
       big = 0; const m = o.material;
       if (!o.isInstancedMesh && o !== sky && m && !Array.isArray(m) && (m.isMeshStandardMaterial || m.isMeshLambertMaterial) && !m.transparent && o.geometry.type !== 'PlaneGeometry') {
         let skip = false; for (let a = o; a; a = a.parent) if (a.userData.anim || a === clouds) { skip = true; break; }
-        if (!skip) { camB3.setFromObject(o); const w = camB3.max.x - camB3.min.x, d = camB3.max.z - camB3.min.z; big = w >= 1 && d >= 1 && w < 60 && d < 60 && camB3.max.y > 1.7 ? 1 : 0; }
+        if (!skip) { camB3.setFromObject(o); const w = camB3.max.x - camB3.min.x, d = camB3.max.z - camB3.min.z; big = w >= 1 && d >= 1 && w < 60 && d < 60 && camB3.max.y > 1.7 ? 1 : 0; o.userData.camLowY = camB3.min.y; }
       }
       o.userData.camBig = big;
     }
@@ -1263,12 +1296,16 @@ function camTick(dt, t) {
   // 말을 걸면 처음 잠깐 상대 쪽으로 돌아봐요. 3인칭이면 얼굴이 대화 상자에 가리지 않게 내 눈높이까지 다가가요.
   const talkN = started && dlgOpen && nearNPC && nearNPC.g.visible ? nearNPC : null;
   if (talkN !== CAM.talkN) { CAM.talkN = talkN; CAM.turn = talkN ? 0.9 : 0; }
+  if (CAM.iso) { // 2.5D: 화면 방향은 고정(Q 로만 돌려요). 걷는 방향은 화면 기준이에요
+    CAM.isoYaw = Math.PI / 4 + CAM.isoK * Math.PI / 2;
+    P.yaw = CAM.isoYaw; P.pitch = 0; CAM.turn = 0;
+  }
   if (talkN && CAM.turn > 0) {
     CAM.turn -= dt; const q = talkN.g.position, k = Math.min(1, dt * 5);
     let dy = Math.atan2(-(q.x - P.x), -(q.z - P.z)) - P.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     P.yaw += dy * k; P.pitch += (-0.04 - P.pitch) * k;
   }
-  CAM.zoom += ((talkN ? 1 : 0) - CAM.zoom) * Math.min(1, dt * 6);
+  CAM.zoom += ((talkN && !CAM.iso ? 1 : 0) - CAM.zoom) * Math.min(1, dt * 6);
   if (!CAM.third) {
     if (CAM.me) CAM.me.visible = false;
     camera.position.set(P.x, P.jy + 1.6 + (started ? Math.sin(t * 9) * 0.02 * walkIn : 0), P.z);
@@ -1286,11 +1323,31 @@ function camTick(dt, t) {
   CAM.still = step > 0.004 && step < 1 ? 0 : CAM.still + dt;
   if (dlgOpen && nearNPC && nearNPC.g.visible) { const q = nearNPC.g.position; face = Math.atan2(q.x - P.x, q.z - P.z); look = [q.x, q.z]; } // 말할 때는 상대를 봐요
   else if (CAM.still < 0.25 && step > 0.004 && step < 1) face = Math.atan2(mx, mz); // 걸을 때는 가는 쪽을 봐요
-  else if (CAM.still < 0.25) face = CAM.face;
+  else if (CAM.still < 0.25 || CAM.iso) face = CAM.face;
   let df = face - CAM.face; df = Math.atan2(Math.sin(df), Math.cos(df)); CAM.face += df * Math.min(1, dt * 10);
   g.position.set(P.x, P.jy, P.z); g.rotation.y = CAM.face;
   let speaking = false; try { speaking = dlgOpen && ui.who.textContent === '나' && !!(window.speechSynthesis && speechSynthesis.speaking); } catch (e) {}
   animatePerson(g, t, dt, { run: running, air: P.jy > 0.02, talk: speaking, look });
+  if (CAM.iso) CAM.isoAge += dt;
+  if ((CAMOCC.t += dt) > (CAM.iso && CAM.isoAge < 4 ? 0.3 : 2)) { CAMOCC.t = 0; try { CAMOCC.list = camOccList(); } catch (e) { CAMOCC.list = []; } }
+  if (CAM.iso) { // 2.5D: 높은 곳에서 비스듬히 내려다봐요. 멀미가 덜 나게 만든 보기예요:
+    //  · 화면 방향·높이·화각이 변하지 않아요(점프해도, 달려도, 대화가 열려도 그대로)
+    //  · 조금 움직일 때는 화면이 따라오지 않고(가운데 1.3m 안), 멀리 갈 때만 부드럽게 따라와요
+    //  · 내 캐릭터는 화면 가운데보다 조금 위에 있어서 대화 상자가 떠도 화면을 옮길 필요가 없어요
+    const pit = -0.98, dist = 30, cp = Math.cos(pit), sp = Math.sin(pit), sy = Math.sin(P.yaw), cy = Math.cos(P.yaw), DZ = 1.3;
+    if (CAM.tx === null || Math.hypot(P.x - CAM.tx, P.z - CAM.tz) > 9) { CAM.tx = P.x; CAM.tz = P.z; } // 처음이거나 순간 이동했으면 바로 맞춰요
+    const ex = P.x - CAM.tx, ez = P.z - CAM.tz, el = Math.hypot(ex, ez);
+    if (el > DZ) { const k = (el - DZ) / el * Math.min(1, dt * 9); CAM.tx += ex * k; CAM.tz += ez * k; }
+    const tx = CAM.tx + sy * 2.2, tz = CAM.tz + cy * 2.2;
+    camera.position.set(tx + sy * cp * dist, 1 - sp * dist, tz + cy * cp * dist);
+    camera.rotation.y = P.yaw; camera.rotation.x = pit;
+    g.visible = true;
+    if (!CAM.pin) { try { const s = textSprite('▼', 0.5, { fs: 60, bg: null, fg: '#ff3b6b' }); s.material.depthTest = false; s.material.depthWrite = false; s.renderOrder = 999; s.position.y = 2.85; s.userData.pol = 1; s.material.toneMapped = false; CAM.pin = s; } catch (e) {} }
+    if (CAM.pin) { if (CAM.pin.parent !== g) g.add(CAM.pin); CAM.pin.visible = true; CAM.pin.position.y = 2.85 + Math.sin(t * 4) * 0.08; }
+    isoTick(dt);
+    return;
+  }
+  if (CAM.pin) CAM.pin.visible = false;
   // 카메라: 머리 위 뒤쪽에서 오른쪽 어깨 너머로 봐요(앞사람이 내 캐릭터에 가리지 않게). 벽·천장·바닥을 뚫지 않게 당겨 와요
   const py = P.jy + 2.3 - 0.68 * CAM.zoom, cp = Math.cos(P.pitch), sp = Math.sin(P.pitch), hx = Math.sin(P.yaw) * cp, hz = Math.cos(P.yaw) * cp;
   let want = 4 * (1 - CAM.zoom);
@@ -1298,7 +1355,6 @@ function camTick(dt, t) {
   if (sp > 0.02) want = Math.min(want, (py - 0.4) / sp);
   let free = want; const ppl = Object.values(NPC);
   for (let d = 0.2; d <= want + 0.3; d += 0.12) { const x = P.x + hx * d, z = P.z + hz * d; if (camBlocked(x, z) || camPerson(ppl, x, z)) { free = Math.max(0, d - 0.4); break; } }
-  if ((CAMOCC.t += dt) > 2) { CAMOCC.t = 0; try { CAMOCC.list = camOccList(); } catch (e) { CAMOCC.list = []; } }
   if (want > 0.3) { let od = Infinity; try { od = camOccDist(P.x, py, P.z, hx, -sp, hz, want + 0.4); } catch (e) {} if (od - 0.35 < free) free = Math.max(0, od - 0.35); }
   CAM.d = free < CAM.d ? free : CAM.d + (free - CAM.d) * Math.min(1, dt * 4);
   const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), bx = P.x + hx * CAM.d, bz = P.z + hz * CAM.d;
@@ -1812,7 +1868,7 @@ function openWriter() {
   $('#wRead').onclick = () => speak(letterText(letterData()).join(' '), '나');
   $('#wDone').onclick = async () => {
     const c = letterData();
-    if (!/^[A-Za-z][A-Za-z .'-]{0,19}$/.test(c.to) || !/^[A-Za-z][A-Za-z .'-]{0,19}$/.test(c.me)) { toast('초대할 친구 이름과 내 이름을 영어로 써 주세요. (예: Nick)'); return; }
+    if (!NAME_OK.test(c.to) || !NAME_OK.test(c.me)) { toast('초대할 친구 이름과 내 이름을 영어로 써 주세요. (예: Nick)'); return; }
     if (c.a1 === c.a2) { toast('행사 내용 두 가지를 서로 다르게 골라 주세요.'); return; }
     if (c.day > MAXD[c.mon - 1]) { toast(`${L.months[c.mon - 1][1]}에는 ${c.day}일이 없어요. 날짜를 다시 골라 주세요.`); return; }
     if ([$('#chk1').checked, $('#chk2').checked, $('#chk3').checked].includes(false)) { toast('체크리스트를 모두 확인해 주세요 ✅'); return; }
@@ -1899,8 +1955,8 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyM') toggleMute();
-  if (e.code === 'Space' && !nearNPC) jump();
-  else if (['KeyE', 'Enter', 'Space'].includes(e.code)) interact();
+  if (e.code === 'Space') jump(); // 스페이스는 점프만 해요 (말 걸기는 E·Enter·클릭)
+  else if (['KeyE', 'Enter'].includes(e.code)) interact();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 let drag = null;
@@ -1910,7 +1966,7 @@ canvas.addEventListener('mousedown', (e) => {
   drag = { x: e.clientX, y: e.clientY, moved: 0 };
 });
 addEventListener('mouseup', (e) => {
-  if (drag && drag.moved < 5 && !dlgOpen && started && !isTouch) { try { canvas.requestPointerLock(); } catch (er) {} }
+  if (drag && drag.moved < 5 && !dlgOpen && started && !isTouch && !CAM.iso) { try { canvas.requestPointerLock(); } catch (er) {} }
   drag = null;
 });
 addEventListener('mousemove', (e) => {
@@ -1982,8 +2038,9 @@ $('#prompt').addEventListener('click', interact);
 // 상단 버튼
 $('#koToggle').onclick = () => { S.koHelp = !S.koHelp; save(); refreshHUD(); toast(S.koHelp ? '한글 도움 켜짐' : '한글 도움 꺼짐 (도전 모드!)'); };
 $('#rateBtn').onclick = () => { S.rate = S.rate >= 0.9 ? 0.7 : 0.9; save(); $('#rateBtn').textContent = S.rate < 0.9 ? '🐢 천천히' : '🔊 보통'; speak('What grade are you in?', 'Kai'); };
-$('#helpBtn').onclick = () => { $('#help').classList.add('show'); openDlg(); ui.dlg.classList.remove('show'); };
-$('#helpClose').onclick = () => { $('#help').classList.remove('show'); closeDlg(); };
+// 도움말: 대화 중에 열었으면 닫을 때 그 대화로 돌아가요 (전에는 대화가 사라져서 그 뒤로 말을 걸 수 없었어요)
+$('#helpBtn').onclick = () => { const h = $('#help'); h.dataset.was = !dlgOpen ? '' : ui.dlg.classList.contains('show') ? 'dlg' : 'other'; h.classList.add('show'); if (!dlgOpen) openDlg(); ui.dlg.classList.remove('show'); if (document.pointerLockElement) document.exitPointerLock(); };
+$('#helpClose').onclick = () => { const h = $('#help'); h.classList.remove('show'); if (h.dataset.was === 'dlg') ui.dlg.classList.add('show'); else if (!h.dataset.was) closeDlg(); };
 $('#mapBtn').onclick = () => { $('#mapBox').classList.toggle('show'); };
 
 // ---------------- 지도 ----------------
@@ -2195,7 +2252,7 @@ function update(dt, t) {
     collide();
   } else running = false;
   if (P.jy > 0) { P.jy += P.vy * dt; P.vy -= 15 * dt; if (P.jy <= 0) { P.jy = 0; P.vy = 0; } }
-  const fovT = running ? 77 : 70; if (Math.abs(camera.fov - fovT) > 0.05) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
+  const fovT = CAM.iso ? 30 : running ? 77 : 70; if (Math.abs(camera.fov - fovT) > 0.05) { if (CAM.iso || camera.fov < 60) camera.fov = fovT; else camera.fov += (fovT - camera.fov) * Math.min(1, dt * 8); camera.updateProjectionMatrix(); }
   coachTick();
   camTick(dt, t);
   if (!started) { P.yaw = Math.sin(t * 0.1) * 0.6; }
@@ -2316,9 +2373,9 @@ showEnd = function () { const was = $('#end').classList.contains('show'); _showE
       const d = document.createElement('div'); d.className = 'myRank'; d.innerHTML = `<b>${rank}</b> · 모은 별 ⭐ ${total}개 · 끝낸 단원 ${done}/12`;
       pick.parentElement.insertBefore(d, pick);
     }
-    const ks = document.querySelector('#title .keys'); if (ks) { const d = document.createElement('div'); d.innerHTML = '🎥 <span class="desk"><kbd>V</kbd> 또는 </span>🎥 버튼: 내 캐릭터 보기 ↔ 내 눈으로 보기'; ks.insertBefore(d, ks.lastElementChild); }
+    const ks = document.querySelector('#title .keys'); if (ks) { const d = document.createElement('div'); d.innerHTML = '🎥 <span class="desk"><kbd>V</kbd> 또는 </span>🎥 버튼: 3D ↔ 2.5D(위에서 보기) ↔ 내 눈으로 보기'; ks.insertBefore(d, ks.lastElementChild); }
     const hp = document.querySelector('#help .panel #helpClose');
-    if (hp) { const q = document.createElement('p'); q.innerHTML = '⌨️ <b>Space</b> 점프 · <b>Shift</b> 달리기 · <b>V</b> 보는 방법(내 캐릭터 보기 ↔ 내 눈으로 보기) · <b>M</b> 효과음·음악 · <b>G</b> 화질 바꾸기. 두 번 틀리면 정답이 살짝 반짝여요.'; hp.parentElement.insertBefore(q, hp); }
+    if (hp) { const q = document.createElement('p'); q.innerHTML = '⌨️ <b>Space</b> 점프 · <b>Shift</b> 달리기 · <b>V</b> 보는 방법(3D → 2.5D 위에서 보기 → 내 눈으로 보기) · 말 걸기는 <b>E</b> · 화면이 어지러우면 <b>V</b> 를 눌러 <b>2.5D</b> 로 바꿔 보세요 · <b>M</b> 효과음·음악 · <b>G</b> 화질 바꾸기. 두 번 틀리면 정답이 살짝 반짝여요.'; hp.parentElement.insertBefore(q, hp); }
   } catch (e) {}
 })();
 // ---------- 포탈: 단원을 끝내면 교문에 다음 단원으로 가는 문이 열려요 (새로 고침 없이 걸어서 넘어가요) ----------
@@ -2366,6 +2423,20 @@ FX2.tickers.push((dt, t) => {
 });
 // 끝 화면에도 바로 가는 단추를 달아요
 try { const ec = document.querySelector('#end #endClose'); if (ec) { const b = document.createElement('button'); b.className = 'big'; b.id = 'endNext'; b.textContent = '🌀 ' + (PORTAL.next === 1 ? '처음 단원' : '다음 단원') + ' Lesson ' + PORTAL.next + ' 로 가기'; b.onclick = portalGo; ec.classList.add('alt'); ec.parentElement.insertBefore(b, ec); } } catch (e) {}
+// ---------- 글쓰기 미션: 어떤 이름을 넣어도 제출은 되게 해요 ----------
+// 전에는 영어 글자만 받아서 siW00 처럼 숫자가 섞이거나 한글로 쓰면 '완성!'이 눌리지 않았어요.
+// 이제 글자·숫자(한글 포함)는 그대로 받고, 화면을 깨뜨릴 수 있는 기호만 지워요. 비어 있으면 Student 로 채워요.
+const NAME_OK = /^[\p{L}\p{N} .'_-]{1,24}$/u;
+const nameClean = (v) => { const s = String(v == null ? '' : v).replace(/[^\p{L}\p{N} .'_-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 24); return s || 'Student'; };
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('#wDone') : null; if (!b) return;
+  try {
+    document.querySelectorAll('#writer input').forEach(i => { const ty = (i.getAttribute('type') || 'text').toLowerCase(); if (ty === 'text' || ty === 'search') { const v = nameClean(i.value); if (v !== i.value) { i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); } } });
+    // 체크리스트: 처음 누를 때는 확인하라고 알려 주고, 한 번 더 누르면 그대로 완성돼요
+    const boxes = [...document.querySelectorAll('#writer input[type=checkbox]')];
+    if (boxes.some(c => !c.checked)) { b.dataset.tries = String((+b.dataset.tries || 0) + 1); if (+b.dataset.tries >= 2) boxes.forEach(c => { c.checked = true; }); else setTimeout(() => { try { toast('체크리스트를 확인해 보세요 ✅<br><small>한 번 더 누르면 그대로 완성돼요.</small>', 3200); } catch (er) {} }, 50); }
+  } catch (er) {}
+}, true);
 // ---------- 선생님 코드로 미션 건너뛰기 (어딘가에서 막혔을 때 쓰는 비상 단추. 도움말 ❓ 안에 있어요) ----------
 try {
   const hc = document.querySelector('#help .panel #helpClose');
@@ -2411,7 +2482,7 @@ else if (qs.has('portal')) { // 포탈을 타고 왔어요: 시작 화면 없이
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
   setTimeout(() => { try { toast('🌀 <b>Lesson ' + lessonNo + '</b> 에 도착했어요!', 2600); confetti(30); } catch (e) {} }, 600);
 }
-window.__game = { say, ask, tick: (dt) => update(dt, performance.now() / 1000), get S() { return S; }, P, NPC, startStage, items: () => items, zones, HOME, stallInfo: typeof stallInfo !== 'undefined' ? stallInfo : null, get decor() { return decor; }, get st() { return stageState; }, get held() { return held; }, get busy() { return busy; } };
+window.__game = { camera, CAM, say, ask, tick: (dt) => update(dt, performance.now() / 1000), get S() { return S; }, P, NPC, startStage, items: () => items, zones, HOME, stallInfo: typeof stallInfo !== 'undefined' ? stallInfo : null, get decor() { return decor; }, get st() { return stageState; }, get held() { return held; }, get busy() { return busy; } };
 if (qs.has('autotest')) { const s = document.createElement('script'); s.src = 'autotest.js'; document.body.appendChild(s); }
 // 함께 하기(multi.js): 반에 참여한 학생끼리 같은 공간에서 만나요. net.js 와 같은 폴더에서 불러와요.
 window.__mp = { scene, makePerson, textSprite, P, L, speak, toast, addStar, confetti, beep, isTouch, prompt: ui.prompt,

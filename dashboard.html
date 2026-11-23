@@ -378,6 +378,7 @@
       $('tbl').innerHTML = head + '<tr><td colspan="' + COLS.length + '" class="d-empty">아직 참여한 학생이 없어요. 학생들에게 반 코드 <b>' + esc(data.cls.code) + '</b>를 알려 주세요.</td></tr>';
       return;
     }
+    var hasPin = {}; (data.accounts || []).forEach(function (a) { if (a.pin) hasPin[a.num] = 1; });
     $('tbl').innerHTML = head + rows.map(function (s) {
       var acc = s.acc == null ? '-' : '<span class="d-bar"><i style="width:' + s.acc + '%"></i></span><span class="' + (s.acc < 60 ? 'd-low' : '') + '">' + s.acc + '%</span> <span class="d-sub">(' + s.correct + '/' + s.tries + ')</span>';
       var on = now - s.lastSeen <= ACTIVE_MS;
@@ -391,7 +392,8 @@
         '<td>' + s.best + '</td>' +
         '<td><span class="d-dot' + (on ? ' on' : '') + '"></span>' + esc(ago(s.lastSeen)) + '</td>' +
         '<td class="wrap">' + (s.weak.length ? s.weak.map(function (q) { return '<span class="tag">' + esc(q) + '</span>'; }).join(' ') : '<span class="d-sub">-</span>') + '</td>' +
-        '<td><button type="button" class="d-btn ghost small" data-kick="' + s.num + '" title="이 학생 기록 지우기">지우기</button></td>' +
+        '<td><button type="button" class="d-btn ghost small" data-kick="' + s.num + '" title="이 학생 기록 지우기">지우기</button>' +
+        (hasPin[s.num] ? ' <button type="button" class="d-btn ghost small" data-reset="' + s.num + '" title="비밀번호를 잊었을 때: 지우면 학생이 다음에 들어올 때 새 비밀번호를 정해요. 저장된 진행은 그대로 남아요.">🔑 비밀번호 초기화</button>' : '') + '</td>' +
         '</tr>';
       if (openCards[key]) {
         tr += '<tr><td></td><td colspan="' + (COLS.length - 1) + '">' + (s.card ? '<div class="d-card">' + esc(s.card) + '</div>' : '<span class="d-sub">아직 글쓰기 카드가 없어요.</span>') + '</td></tr>';
@@ -409,6 +411,17 @@
     if (th) { var k = th.getAttribute('data-k'); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'num' || k === 'nick') ? 1 : -1; } render(); return; }
     var nb = e.target.closest('[data-card]');
     if (nb) { var key = nb.getAttribute('data-card'); openCards[key] = !openCards[key]; render(); return; }
+    var rb = e.target.closest('[data-reset]');
+    if (rb) {
+      var rn = rb.getAttribute('data-reset');
+      if (!confirm(rn + '번 학생의 비밀번호를 초기화할까요?\n학생이 다음에 들어올 때 새 비밀번호를 정해요. 저장된 진행은 그대로 남아요.')) return;
+      rb.disabled = true;
+      call({ action: 'resetPin', code: sess.code, pin: sess.pin, num: Number(rn) }).then(function (res) {
+        refresh();
+        setTimeout(function () { msg('bMsg', res.ok ? rn + '번 비밀번호를 초기화했어요. 학생에게 다시 들어와서 새 비밀번호를 정하라고 알려 주세요.' : (res.msg || '초기화하지 못했어요.'), !!res.ok); }, 1500);
+      });
+      return;
+    }
     var kb = e.target.closest('[data-kick]');
     if (kb) {
       var num = kb.getAttribute('data-kick');

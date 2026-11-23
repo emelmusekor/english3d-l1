@@ -31,7 +31,7 @@ function saveF() { // 다른 창에서 받은 것도 잃지 않게 합쳐서 저
   } catch (e) {}
 }
 let dirty = false;
-function flush() { if (!dirty) return; dirty = false; try { G.save(); } catch (e) {} saveF(); }
+function flush() { if (!dirty || window.__e3dReloading) return; dirty = false; try { G.save(); } catch (e) {} saveF(); }
 addEventListener('pagehide', safe(flush));
 const lessonSave = (n) => { if (n === G.lessonNo) return G.S; try { return JSON.parse(localStorage.getItem('english3d_l' + n + '_v1')); } catch (e) { return null; } };
 function totals() { // 모든 단원 기록: 별 합계, 끝낸 단원 수, 미션을 하나라도 끝냈는지, 소리 코인을 다 모은 단원이 있는지
