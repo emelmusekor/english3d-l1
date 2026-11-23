@@ -80,6 +80,7 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfx(k) { try { G.beep(k); } catch (e) {} }
   function toast(html, ms) { try { G.toast(html, ms || 2600); } catch (e) {} }
+  function fire(type) { try { window.dispatchEvent(new CustomEvent('e3d', { detail: { type: type } })); } catch (e) {} } // 게임성 층(fun.js)에 알려요 (배지)
 
   // ------------------------------------------------------------ 내 정보
   var me = null;          // { code, num, nick }
@@ -95,7 +96,8 @@
     a = a && typeof a === 'object' ? a : {};
     var o = {};
     var kk = a.key || a.look;
-    if (typeof kk === 'string' && /^(Nara|Hajun|Olivia|Kai|Rani|Joel)$/.test(kk)) return { look: kk };
+    var dc = typeof a.deco === 'number' && a.deco === Math.floor(a.deco) && a.deco >= 1 && a.deco <= 9 ? a.deco : 0; // 꾸미기 번호: 정수 1~9만 (0·없음이면 보내지 않아요)
+    if (typeof kk === 'string' && /^(Nara|Hajun|Olivia|Kai|Rani|Joel)$/.test(kk)) return dc ? { look: kk, deco: dc } : { look: kk };
     ['skin', 'pants', 'hair', 'shirt', 'skirt'].forEach(function (k) {
       var v = Number(a[k]); if (a[k] != null && isFinite(v) && v >= 0 && v <= 0xffffff) o[k] = v | 0;
     });
@@ -381,6 +383,7 @@
     try { G.confetti(14); } catch (e) {}
     sfx('star');
     toast('🙌 <b>High five!</b> ' + esc(p.st.k) + wa(p.st.k) + ' 손뼉 짝!', 2200);
+    fire('mp_five');
     if (!G.dlgOpen) setTimeout(function () { try { G.speak('High five!', '나'); } catch (e) {} }, 700);
   }
 
@@ -548,6 +551,7 @@
           pendingOut = { id: id, to: p.id, t: Date.now() };
           try { G.speak(q.en, '나'); } catch (e) {}
           send('q', { i: i, id: id }, p.id);
+          fire('mp_ask');
           toast('🗣 “' + esc(q.en) + '” 대답을 기다려요…', 3000);
         } };
       })

@@ -10,12 +10,14 @@ if (!window.THREE) { errBox.textContent = '3D 엔진을 불러오지 못했어�
 
 // ---------------- 저장 ----------------
 const SAVE_KEY = 'english3d_l12_v1';
-const fresh = () => ({ v: 1, stage: 0, stars: 0, correct: 0, tries: 0, streak: 0, best: 0, th: [], card: null, koHelp: true, rate: 0.9 });
+const fresh = () => ({ v: 1, stage: 0, stars: 0, correct: 0, tries: 0, streak: 0, best: 0, th: [], card: null, koHelp: true, rate: 0.9, gems: 0, medals: [] });
 let S = fresh();
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.v === 1) S = Object.assign(fresh(), s); } catch (e) {}
 const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} };
 // 반 활동 기록 (백엔드가 설정되지 않으면 아무 일도 하지 않아요)
-const track = (type, data) => { try { if (window.NET) window.NET.track(type, data); } catch (e) {} };
+// 게임 안 알림: 게임성 층(fun.js)이 window 의 'e3d' 이벤트로 들어요 (미션 끝·정답·포탈 등)
+const fire = (type, data) => { try { window.dispatchEvent(new CustomEvent('e3d', { detail: { type, data } })); } catch (e) {} };
+const track = (type, data) => { fire(type, data); try { if (window.NET) window.NET.track(type, data); } catch (e) {} };
 try { if (window.NET) window.NET.init({ lesson: L.id || 'L1' }); } catch (e) {}
 
 // ---------------- 소리 ----------------
@@ -31,7 +33,7 @@ function beep(type) {
   try {
     AC = AC || new (window.AudioContext || window.webkitAudioContext)();
     if (AC.state === 'suspended' && AC.resume) AC.resume();
-    const seq = SFX[type] || [[440, .1]];
+    const seq = Array.isArray(type) ? type : SFX[type] || [[440, .1]];
     const vol = type === 'click' ? .05 : type === 'bad' ? .08 : type === 'jump' ? .06 : .12;
     let t = AC.currentTime;
     for (const [f, d] of seq) {
@@ -380,11 +382,14 @@ function portrait(opts, key) {
 // 내 캐릭터
 const AVATARS = ['Nara', 'Hajun', 'Olivia', 'Kai', 'Rani', 'Joel'];
 const avatarKey = () => { let k = null; try { k = localStorage.getItem('english3d_avatar'); } catch (e) {} return AVATARS.includes(k) ? k : 'Nara'; };
+const decoOk = (n) => { n = Math.round(Number(n)); return n >= 1 && n <= 9 ? n : 0; };
+let avatarDeco = 0; try { avatarDeco = decoOk(localStorage.getItem('english3d_deco')); } catch (e) {}
 window.__avatar = {
   list: AVATARS,
-  get: () => ({ key: avatarKey() }),
+  get: () => (avatarDeco ? { key: avatarKey(), deco: avatarDeco } : { key: avatarKey() }),
+  setDeco: (n) => { avatarDeco = decoOk(n); try { localStorage.setItem('english3d_deco', String(avatarDeco)); } catch (e) {} },
   set: (k) => { if (AVATARS.includes(k)) try { localStorage.setItem('english3d_avatar', k); } catch (e) {} },
-  make: (o = {}) => makePerson({ name: o.name || '친구', look: o.look || o.key || avatarKey(), scale: o.scale, adult: false }),
+  make: (o = {}) => makePerson({ name: o.name || '친구', look: o.look || o.key || avatarKey(), deco: decoOk(o.deco), scale: o.scale, adult: false }),
   portrait: (k) => portrait({ name: k || avatarKey() }, 'av:' + (k || avatarKey())),
   animate: (g, t, dt, flags) => animatePerson(g, t, dt, flags),
   people: null
@@ -395,7 +400,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.2'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.3'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -857,6 +862,36 @@ const PGEO = {}; // 사람 부품 모양은 한 번만 만들어 같이 써요
 const pgeo = (k, f) => PGEO[k] || (PGEO[k] = f());
 const PATS = ['plain', 'stripe', 'band', 'shirt', 'star', 'plain'];
 const HAIR_G = ['long', 'bob', 'pony', 'twin', 'long', 'bun'], HAIR_B = ['short', 'side', 'short', 'spiky', 'curly', 'side'];
+// 꾸미기(fun.js 에서 골라요): 1 모자 · 2 가방 · 3 풍선 · 4 왕관 · 5 나비 날개. 몸·머리 부품과 하나로 합쳐져서 그리기 횟수는 늘지 않아요
+function decoParts(d, g, headG, R, sh) {
+  const part = (key, f, c, x, y, z, parent) => { const m = new THREE.Mesh(pgeo(key, f), mat(c)); m.position.set(x, y, z); m.userData.ns = 1; parent.add(m); return m; };
+  const ballG = () => new THREE.SphereGeometry(1, 12, 8);
+  if (d === 1) { // 모자
+    part('dDome', () => new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0xe03131, 0, 0.13, 0.01, headG).scale.set(R * 1.24, R * 1.02, R * 1.24);
+    const br = part('dBrim', () => new THREE.CylinderGeometry(0.2, 0.2, 0.03, 14), 0xc92a2a, 0, 0.14, R * 1.1, headG); br.scale.set(1.1, 1, 0.9); br.rotation.x = 0.14;
+    part('dBall', ballG, 0xffffff, 0, 0.13 + R * 1.02, 0.01, headG).scale.setScalar(0.04);
+  } else if (d === 2) { // 가방
+    part('dPack', () => new THREE.BoxGeometry(0.38, 0.44, 0.18), 0x339af0, 0, 1.1, -(sh * 0.85 + 0.085), g);
+    part('dPocket', () => new THREE.BoxGeometry(0.27, 0.17, 0.06), 0x1864ab, 0, 1.01, -(sh * 0.85 + 0.2), g);
+    part('dFlap', () => new THREE.BoxGeometry(0.39, 0.1, 0.19), 0xffd43b, 0, 1.3, -(sh * 0.85 + 0.085), g);
+  } else if (d === 3) { // 풍선 (허리에 묶어서 왼쪽 어깨 위로 떠 있어요)
+    const a = new THREE.Vector3(0.24, 1.15, -0.16), b = new THREE.Vector3(0.52, 2.38, -0.34), dir = b.clone().sub(a);
+    const st = part('dString', () => new THREE.CylinderGeometry(0.008, 0.008, 1, 5), 0xf1f3f5, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, g);
+    st.scale.y = dir.length(); st.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    part('dBall', ballG, 0xff6b6b, b.x + 0.03, b.y + 0.25, b.z - 0.03, g).scale.set(0.22, 0.27, 0.22);
+    part('dKnot', () => new THREE.ConeGeometry(0.035, 0.06, 6), 0xe03131, b.x, b.y, b.z, g);
+  } else if (d === 4) { // 왕관
+    const y = R * 0.9;
+    const rg = part('dRing', () => new THREE.TorusGeometry(0.18, 0.035, 6, 16), 0xffc233, 0, y, -0.01, headG); rg.rotation.x = Math.PI / 2; rg.scale.set(1, 1, 1.5);
+    for (let i = 0; i < 5; i++) { const an = i * Math.PI * 2 / 5; part('dSpike', () => new THREE.ConeGeometry(0.05, 0.13, 6), 0xffc233, Math.sin(an) * 0.18, y + 0.1, Math.cos(an) * 0.18 - 0.01, headG); part('dBall', ballG, i % 2 ? 0x4dabf7 : 0xe03131, Math.sin(an) * 0.18, y + 0.175, Math.cos(an) * 0.18 - 0.01, headG).scale.setScalar(0.026); }
+  } else if (d === 5) { // 나비 날개
+    for (const sd of [-1, 1]) {
+      const up = part('dBall', ballG, 0xf783ac, sd * 0.36, 1.4, -(sh * 0.85 + 0.07), g); up.scale.set(0.3, 0.36, 0.035); up.rotation.set(0, sd * -0.25, sd * -0.5);
+      const dn = part('dBall', ballG, 0xb197fc, sd * 0.27, 1.02, -(sh * 0.85 + 0.06), g); dn.scale.set(0.19, 0.23, 0.035); dn.rotation.set(0, sd * -0.25, sd * 0.45);
+      part('dBall', ballG, 0xffffff, sd * 0.4, 1.46, -(sh * 0.85 + 0.12), g).scale.set(0.07, 0.09, 0.02);
+    }
+  }
+}
 function makePerson(o0) {
   const look = CAST[o0.look || o0.name];
   const o = Object.assign({}, o0, look || {});
@@ -914,6 +949,7 @@ function makePerson(o0) {
   if (st === 'bun') tuft(0, R * 0.95, -R * 0.6, 0.14);
   if (o.band) { const b = new THREE.Mesh(new THREE.TorusGeometry(R * 1.06, 0.03, 6, 20, Math.PI), mat(o.band)); b.position.set(0, 0.02, 0.03); b.rotation.x = -0.12; headG.add(ns(b)); }
   if (o.hat) { cyl(0.22, 0.24, 0.35, 0xffffff, 0, 0.38, 0, headG); ball(0.27, 0xffffff, 0, 0.58, 0, headG); }
+  if (o0.deco) decoParts(o0.deco | 0, g, headG, R, sh);
   // 얼굴
   const eyes = [-1, 1].map(sd => {
     const e = new THREE.Group(); e.position.set(sd * 0.105, 0.035, R * 0.86); headG.add(e);
@@ -1226,10 +1262,10 @@ function camTick(dt, t) {
     camera.rotation.y = P.yaw; camera.rotation.x = P.pitch; return;
   }
   // 내 캐릭터
-  const key = avatarKey();
+  const meLook = avatarKey(), key = meLook + ':' + avatarDeco;
   if (!CAM.me || CAM.key !== key) {
     if (CAM.me) scene.remove(CAM.me);
-    const g = makePerson({ name: '나', look: key, adult: false }); g.userData.tag.visible = false; g.userData.mark.visible = false;
+    const g = makePerson({ name: '나', look: meLook, deco: avatarDeco, adult: false }); g.userData.tag.visible = false; g.userData.mark.visible = false;
     scene.add(g); CAM.me = g; CAM.key = key; CAM.face = P.yaw + Math.PI; CAM.lx = P.x; CAM.lz = P.z;
   }
   const g = CAM.me, mx = P.x - CAM.lx, mz = P.z - CAM.lz, step = Math.hypot(mx, mz); CAM.lx = P.x; CAM.lz = P.z;
@@ -1405,7 +1441,7 @@ function ask(who, en, ko, choices, o = {}) {
           setTimeout(() => { dlgChoiceKeys = null; res(first); }, o.wait || 1100);
         } else {
           b.classList.add('wrong'); b.disabled = true; beep('bad');
-          if (first) { S.tries++; S.streak = 0; save(); } first = false;
+          if (first) { S.tries++; S.streak = 0; save(); fire('miss', { stage: S.stage }); } first = false;
           if (o.hint) { ui.ko.style.display = 'block'; ui.ko.textContent = '💡 ' + o.hint; }
           if (++wrongs >= 2 && btns.length >= 4) btns.forEach(x => { if (x.dataset.r) x.classList.add('nudge'); });
         }
@@ -2234,7 +2270,7 @@ function loop(now) {
 
 // ---------------- 시작 ----------------
 function begin(reset) {
-  if (reset) { const keep = { koHelp: S.koHelp, rate: S.rate }; S = Object.assign(fresh(), keep); save(); }
+  if (reset) { const keep = { koHelp: S.koHelp, rate: S.rate, medals: Array.isArray(S.medals) ? S.medals : [] }; S = Object.assign(fresh(), keep); save(); }
   $('#title').classList.remove('show'); started = true;
   P.x = 0; P.z = 40; P.yaw = 0; P.pitch = 0;
   startStage(S.stage);
@@ -2345,6 +2381,11 @@ window.__mp = { scene, makePerson, textSprite, P, L, speak, toast, addStar, conf
   get S() { return S; }, get started() { return started; }, get dlgOpen() { return dlgOpen; }, get busy() { return busy; }, get nearNPC() { return nearNPC; },
   lock(on) { dlgOpen = !!on; if (on) { if (document.pointerLockElement) document.exitPointerLock(); for (const k in keys) keys[k] = false; } } };
 try { const n = document.querySelector('script[src$="net.js"]'); if (n) { const s = document.createElement('script'); s.src = n.getAttribute('src').replace(/net\.js$/, 'multi.js'); document.body.appendChild(s); } } catch (e) {}
+// 게임성 층(fun.js): 보석 모으기·미션 결과 카드와 메달·배지·꾸미기. net.js 와 같은 폴더에서 불러와요. 없어도 게임은 그대로 돼요.
+window.__fun = { scene, P, L, NPC, NAV, navGrid, navFind, tickers: FX2.tickers, haloTex, beep, confetti, addStar, save, lessonNo,
+  get S() { return S; }, get started() { return started; }, get dlgOpen() { return dlgOpen; }, get busy() { return busy; }, get objective() { return objective; }, get items() { return items; },
+  get stages() { return STAGES.length; } };
+try { const n = document.querySelector('script[src$="net.js"]'); if (n) { const s = document.createElement('script'); s.src = n.getAttribute('src').replace(/net\.js$/, 'fun.js'); document.body.appendChild(s); } } catch (e) {}
 })();
 // 개발용 화면 위치: ?view=x,z,yaw  /  ?dlg=1
 (() => { const q = new URLSearchParams(location.search); const G = window.__game; if (q.has('view')) { const [x, z, y] = q.get('view').split(',').map(Number); G.P.x = x; G.P.z = z; G.P.yaw = y; } })();
