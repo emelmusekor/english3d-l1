@@ -281,3 +281,5 @@ body.touch #mpChip.show~#mpEmoBtn{display:block}
 #decoPick button.lock small{color:var(--muted)}
 #decoPick .dpHow{flex-basis:100%;font-size:13px;color:var(--muted)}
 #decoPick .dpHow:empty{display:none}
+/* 선생님 코드로 미션 건너뛰기 (도움말 안) */
+#skipBox{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:#f4f1ff;border:2px dashed #b197fc;font-size:15px;text-align:left;line-height:1.5}#skipBox span{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}#skipBox input{width:110px;font:inherit;font-size:18px;padding:5px 8px;border:2px solid #b197fc;border-radius:10px;text-align:center}#skipBox button{font:inherit;font-size:15px;border:0;border-radius:10px;padding:6px 12px;background:#7048e8;color:#fff;cursor:pointer}#skipBox i{display:block;font-style:normal;color:#c2255c;min-height:20px;margin-top:4px}

@@ -2402,6 +2402,30 @@ FX2.tickers.push((dt, t) => {
 });
 // 끝 화면에도 바로 가는 단추를 달아요
 try { const ec = document.querySelector('#end #endClose'); if (ec) { const b = document.createElement('button'); b.className = 'big'; b.id = 'endNext'; b.textContent = '🌀 ' + (PORTAL.next === 1 ? '처음 단원' : '다음 단원') + ' Lesson ' + PORTAL.next + ' 로 가기'; b.onclick = portalGo; ec.classList.add('alt'); ec.parentElement.insertBefore(b, ec); } } catch (e) {}
+// ---------- 선생님 코드로 미션 건너뛰기 (어딘가에서 막혔을 때 쓰는 비상 단추. 도움말 ❓ 안에 있어요) ----------
+try {
+  const hc = document.querySelector('#help .panel #helpClose');
+  if (hc) {
+    const box = document.createElement('div'); box.id = 'skipBox';
+    box.innerHTML = '<b>🔑 미션이 막혔나요?</b> 선생님께 받은 코드를 넣으면 지금 미션을 건너뛰어요.<span><input id="skipCode" inputmode="numeric" maxlength="8" placeholder="코드" autocomplete="off"><button type="button" id="skipGo">이 미션 건너뛰기</button></span><i id="skipMsg"></i>';
+    hc.parentElement.insertBefore(box, hc);
+    const inp = box.querySelector('#skipCode'), msg = box.querySelector('#skipMsg');
+    const go = () => {
+      const want = String((window.NET_CONFIG && window.NET_CONFIG.skipCode) || '2580'), got = String(inp.value || '').trim();
+      if (!got) { msg.textContent = '코드를 넣어 주세요.'; return; }
+      if (got !== want) { msg.textContent = '코드가 달라요. 선생님께 다시 물어봐요.'; inp.value = ''; try { beep('bad'); } catch (e) {} return; }
+      if (!started) { msg.textContent = '게임을 시작한 뒤에 쓸 수 있어요.'; return; }
+      if (S.stage >= STAGES.length - 1) { msg.textContent = '이미 모든 미션을 끝냈어요.'; return; }
+      try { track('skip', { stage: S.stage }); } catch (e) {}
+      S.stage += 1; save();
+      msg.textContent = '⏭ 다음 미션으로 넘어가요…';
+      setTimeout(() => { location.href = location.pathname + '?skip=1'; }, 400); // 깨끗한 상태로 다시 열어요
+    };
+    box.querySelector('#skipGo').onclick = go;
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); });
+    inp.addEventListener('keyup', (e) => e.stopPropagation());
+  }
+} catch (e) {}
 $('#btnStart').onclick = () => begin(true);
 $('#btnContinue').onclick = () => begin(false);
 if (S.stage > 0) { $('#btnContinue').style.display = 'inline-block'; $('#btnContinue').textContent = `이어하기 (${STAGES[Math.min(S.stage, STAGES.length - 1)].title})`; $('#btnStart').textContent = '처음부터'; }
@@ -2413,6 +2437,11 @@ requestAnimationFrame(loop);
 const qs = new URLSearchParams(location.search);
 if (qs.has('audit')) auditLog = { rows: [], last: '', pending: true };
 if (qs.has('stage')) { S.stage = +qs.get('stage'); begin(false); }
+else if (qs.has('skip')) { // 선생님 코드로 미션을 건너뛰었어요: 바로 다음 미션부터
+  begin(false);
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  setTimeout(() => { try { toast('⏭ 미션을 건너뛰었어요. 여기서부터 이어서 해요!', 3200); } catch (e) {} }, 600);
+}
 else if (qs.has('portal')) { // 포탈을 타고 왔어요: 시작 화면 없이 바로 이어서 해요
   begin(false);
   try { history.replaceState(null, '', location.pathname); } catch (e) {}

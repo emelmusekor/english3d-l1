@@ -1047,7 +1047,7 @@ function setBoothSign(id, text, done) {
   const b = boothInfo[id];
   if (b.sign) { scene.remove(b.sign); b.sign.geometry.dispose(); }
   const s = textPlane(text, 0.7, { fs: 62, bg: done ? '#e76f51' : '#adb5bd', fg: '#fff', minW: 460 });
-  s.position.set(b.xo + b.side * -0.05, 3.6, b.z); s.rotation.y = -b.side * Math.PI / 2;
+  s.position.set(b.xo - b.side * 0.45, 3.5, b.z); s.rotation.y = -b.side * Math.PI / 2; // 지붕 앞면(±24.2)보다 앞에 달아요. 뒤에 두면 아래쪽이 지붕에 가려져요
   scene.add(s); b.sign = s;
 }
 function buildProps(id, cx, z, side) {
@@ -1590,12 +1590,14 @@ function stage3() {
     await say('Hajun', 'Oh no! The club signs fell down!', '이런! 동아리 이름표가 다 떨어졌어!');
     await say('', '', '학교 곳곳에 떨어진 동아리 이름표 6장을 주워서, 알맞은 동아리 방(양쪽 부스)에 붙여 주세요. 방 안의 물건을 잘 보면 무슨 동아리인지 알 수 있어요!', { btn: '찾으러 가자!' });
     closeDlg();
+    // 찾는 도중 다시 말을 걸면 처음부터 다시 하지 않고 안내만 해요 (전에는 이름표가 또 생겨서 같은 이름표가 두 장이 됐어요)
+    NPC.hajun.talk = async () => { await say('', '', `🏷️ 이름표를 찾아 알맞은 동아리 방에 붙여 주세요! (지금 ${stageState.cards || 0}/6)`, { btn: '알겠어!' }); closeDlg(); };
     const spots = [[-16, 30], [14, 20], [-20, -22], [20, -22], [-2, 26], [4, -16]];
     stageState.cards = 0;
     shuffle(L.clubs).forEach((c, i) => {
       const card = textSprite(c.en, 0.7, { fs: 60, bg: '#ffffff', fg: '#e76f51', border: '#e76f51' });
       addItem(card, ...spots[i], (it) => {
-        if (held) { if (!stageState.warned) { toast('이름표는 한 장씩만 들 수 있어요. 먼저 붙이고 오세요!'); stageState.warned = 1; } return; }
+        if (held) { const now = Date.now(); if (now - (stageState.warned || 0) > 3000) { stageState.warned = now; toast(`이름표는 한 장씩만 들 수 있어요.<br>먼저 <b>${held.item ? held.item.en : '들고 있는 이름표'}</b> 를 붙이고 오세요!`); } return; }
         removeItem(it); held = { kind: 'card', club: c.id, label: '🏷️ ' + c.en, item: c }; beep('get'); speak(c.en); refreshHUD();
         setObj(`🏷️ <b>${c.en}</b> 이름표를 알맞은 동아리 방에 붙여요`, boothPos(c.id), { area: 18 });
       }, { y: 1.4, r: 1.4 });
@@ -1603,7 +1605,7 @@ function stage3() {
     setObj('🏷️ 떨어진 동아리 이름표를 찾아요 (0/6) — 하얀 이름표가 떠 있어요', nearestItem);
     zoneHandlers.booth = (id) => {
       if (!held || held.kind !== 'card') return;
-      if (stageState.boothDone && stageState.boothDone[id]) return;
+      if (stageState.boothDone && stageState.boothDone[id]) { beep('bad'); toast(`여기는 이미 이름표를 붙인 방이에요.<br><b>${held.item.en}</b> 방을 찾아봐요!`); return; }
       if (held.club !== id) { beep('bad'); toast(`이곳은 <b>${held.item.en}</b>이 아닌 것 같아요.<br>방 안의 물건을 잘 보세요!`); return; }
       stageState.boothDone = stageState.boothDone || {}; stageState.boothDone[id] = 1;
       setBoothSign(id, held.item.en, true); speak(`This is the ${held.item.en}.`); toast(`⭐ ${held.item.en} 완성!`);
@@ -2316,6 +2318,30 @@ FX2.tickers.push((dt, t) => {
 });
 // 끝 화면에도 바로 가는 단추를 달아요
 try { const ec = document.querySelector('#end #endClose'); if (ec) { const b = document.createElement('button'); b.className = 'big'; b.id = 'endNext'; b.textContent = '🌀 ' + (PORTAL.next === 1 ? '처음 단원' : '다음 단원') + ' Lesson ' + PORTAL.next + ' 로 가기'; b.onclick = portalGo; ec.classList.add('alt'); ec.parentElement.insertBefore(b, ec); } } catch (e) {}
+// ---------- 선생님 코드로 미션 건너뛰기 (어딘가에서 막혔을 때 쓰는 비상 단추. 도움말 ❓ 안에 있어요) ----------
+try {
+  const hc = document.querySelector('#help .panel #helpClose');
+  if (hc) {
+    const box = document.createElement('div'); box.id = 'skipBox';
+    box.innerHTML = '<b>🔑 미션이 막혔나요?</b> 선생님께 받은 코드를 넣으면 지금 미션을 건너뛰어요.<span><input id="skipCode" inputmode="numeric" maxlength="8" placeholder="코드" autocomplete="off"><button type="button" id="skipGo">이 미션 건너뛰기</button></span><i id="skipMsg"></i>';
+    hc.parentElement.insertBefore(box, hc);
+    const inp = box.querySelector('#skipCode'), msg = box.querySelector('#skipMsg');
+    const go = () => {
+      const want = String((window.NET_CONFIG && window.NET_CONFIG.skipCode) || '2580'), got = String(inp.value || '').trim();
+      if (!got) { msg.textContent = '코드를 넣어 주세요.'; return; }
+      if (got !== want) { msg.textContent = '코드가 달라요. 선생님께 다시 물어봐요.'; inp.value = ''; try { beep('bad'); } catch (e) {} return; }
+      if (!started) { msg.textContent = '게임을 시작한 뒤에 쓸 수 있어요.'; return; }
+      if (S.stage >= STAGES.length - 1) { msg.textContent = '이미 모든 미션을 끝냈어요.'; return; }
+      try { track('skip', { stage: S.stage }); } catch (e) {}
+      S.stage += 1; save();
+      msg.textContent = '⏭ 다음 미션으로 넘어가요…';
+      setTimeout(() => { location.href = location.pathname + '?skip=1'; }, 400); // 깨끗한 상태로 다시 열어요
+    };
+    box.querySelector('#skipGo').onclick = go;
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go(); });
+    inp.addEventListener('keyup', (e) => e.stopPropagation());
+  }
+} catch (e) {}
 $('#btnStart').onclick = () => begin(true);
 $('#btnContinue').onclick = () => begin(false);
 if (S.stage > 0) { $('#btnContinue').style.display = 'inline-block'; $('#btnContinue').textContent = `이어하기 (${STAGES[Math.min(S.stage, STAGES.length - 1)].title})`; $('#btnStart').textContent = '처음부터'; }
@@ -2327,6 +2353,11 @@ requestAnimationFrame(loop);
 const qs = new URLSearchParams(location.search);
 if (qs.has('audit')) auditLog = { rows: [], last: '', pending: true };
 if (qs.has('stage')) { S.stage = +qs.get('stage'); begin(false); }
+else if (qs.has('skip')) { // 선생님 코드로 미션을 건너뛰었어요: 바로 다음 미션부터
+  begin(false);
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  setTimeout(() => { try { toast('⏭ 미션을 건너뛰었어요. 여기서부터 이어서 해요!', 3200); } catch (e) {} }, 600);
+}
 else if (qs.has('portal')) { // 포탈을 타고 왔어요: 시작 화면 없이 바로 이어서 해요
   begin(false);
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
