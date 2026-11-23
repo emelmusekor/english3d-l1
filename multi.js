@@ -1,4 +1,4 @@
-/* 영어 3D · 함께 하기 (같은 반 · 같은 모둠 친구와 한 공간에서 만나요)
+/* 영어 3D · 함께 하기 (같은 반 · 같은 단원 친구가 모두 한 공간에서 만나요. 최대 30명)
  * - 반에 참여한 학생만 켜져요. 연결이 안 되면 조용히 혼자 하기로 돌아가요. 게임은 절대 막지 않아요.
  * - 서버 없이 브라우저끼리 바로 연결해요(WebRTC). 처음 만날 때만 공개 중계소를 잠깐 써요.
  * - 오가는 것: 위치·방향, 별명·번호, 옷 색, 미션 번호·별 수, 정해진 이모트/문장 번호. 자유 글은 보내지 않아요.
@@ -19,8 +19,13 @@
   var APP = 'emelmusekor.github.io/english3d';
   var VER = '0.27.0';
   var STRATS = ['trystero', '@trystero-p2p/torrent', '@trystero-p2p/mqtt']; // 앞의 것이 막히면 다음 것으로
-  var MAX = 8;            // 한 모둠(방) 최대 인원
-  var SEND_MS = 200;      // 위치 보내기 간격 (5Hz)
+  var MAX = 30;           // 한 반(방) 최대 인원
+  var DIRECT = 8;         // 직접 연결하는 이웃 수 (나머지 친구는 이웃을 거쳐 전해져요)
+  try { var dd = isDev ? parseInt(qs.get('mpdirect'), 10) : 0; if (dd >= 4 && dd <= 32) DIRECT = dd; } catch (e) {} // 개발용: ?mpdirect=4
+  var SEND_MS = 200;      // 위치 보내기 간격 (5Hz, 사람이 많으면 느리게)
+  var AWAY_MS = 7000;     // 이만큼 소식이 없으면 '잠깐 끊김'
+  var GRACE_MS = 15000;   // 끊긴 뒤 이만큼 기다렸다가 내보내요
+  var QUIET_N = 10;       // 친구가 이보다 많으면 들어옴·나감 알림을 줄여요
   var NEAR = 3.2;         // 말 걸 수 있는 거리
   var STAR_COOL = 90000;  // 같은 친구와 별 보너스 쉬는 시간
   var STAR_DAY = 12;      // 하루 친구 별 보너스 상한
@@ -78,7 +83,6 @@
 
   // ------------------------------------------------------------ 내 정보
   var me = null;          // { code, num, nick }
-  var group = 1;
   var lessonId = /^L\d{1,2}$/.test(String(G.L && G.L.id)) ? G.L.id : 'L1';
   function readProfile() {
     if (devMp) {
@@ -132,21 +136,25 @@
   var peers = {};         // userId → peer
   var lastSent = '', lastSentT = 0, lastStateSig = '', leaving = false;
 
-  function roomId() { return me.code + '-' + lessonId + '-g' + group; }
+  function roomId() { return me.code + '-' + lessonId + '-all'; } // 반 전체가 한 방
   function peerList() { return Object.keys(peers).map(function (k) { return peers[k]; }); }
-  function liveList() { return peerList().filter(function (p) { return p.st; }); }
+  function liveList() { return peerList().filter(function (p) { return p.st && !p.away; }); }
+  function quiet() { return liveList().length > QUIET_N; }
 
   function connect() {
     if (room || connecting || !me) return;
     connecting = true; setStatus('wait');
-    // 같은 반 친구들이 시작 자리에서 한데 겹쳐 서지 않게 번호에 따라 조금씩 옆으로 서요
-    try { var P0 = G.P; if (Math.abs(P0.x) < 0.01 && Math.abs(P0.z - 40) < 0.01) { P0.x = ((me.num - 1) % 5 - 2) * 1.1; P0.z = 40 + (Math.floor((me.num - 1) / 5) % 2) * 1.3; } } catch (e) {}
+    // 같은 반 친구들이 시작 자리에서 한데 겹쳐 서지 않게 번호에 따라 줄을 맞춰 서요 (7명씩 7줄, 가운데 길을 따라)
+    try { var P0 = G.P, i0 = (me.num - 1) % 49; if (Math.abs(P0.x) < 0.01 && Math.abs(P0.z - 40) < 0.01) { P0.x = (i0 % 7 - 3) * 1.1; P0.z = 40 - Math.floor(i0 / 7) * 1.2; } } catch (e) {}
     var my = ++gen, name = STRATS[stratI];
     withTimeout(import('https://cdn.jsdelivr.net/npm/' + name + '@' + VER + '/+esm'), 15000).then(function (mod) {
       if (my !== gen) return;
       connecting = false;
       T = mod;
-      var r = mod.joinRoom({ appId: APP, identity: 'none', maxUsers: MAX, relayConfig: { warnOnRelayFailure: false } }, roomId());
+      var opt = { appId: APP, identity: 'none', maxUsers: MAX, relayConfig: { warnOnRelayFailure: false } };
+      // 큰 방: 이웃 몇 명하고만 직접 연결하고 나머지는 건너서 전해요(30명이 서로 다 직접 연결하면 기기가 버티지 못해요)
+      try { if (typeof mod.scale === 'function') opt.use = [mod.scale({ maxDirectPeers: DIRECT })]; } catch (e) {}
+      var r = mod.joinRoom(opt, roomId());
       room = r;
       wire(r, my);
       clearTimeout(watchTo);
@@ -185,7 +193,7 @@
         if (my !== gen) return;
         var code = err && err.code;
         if (code === 'relay-failed' && !peerList().length) nextStrategy();
-        else if (code === 'room-full' && !peerList().length) { setStatus('full'); toast('👥 이 모둠은 꽉 찼어요. 다른 모둠을 골라 보세요.', 3500); }
+        else if (code === 'room-full' && !peerList().length) { setStatus('full'); toast('👥 지금은 우리 반 방이 꽉 찼어요(' + MAX + '명). 혼자 하기로 계속해요.', 3500); }
       });
       ust = r.makeUserState('me', null);
       lastStateSig = JSON.stringify(myState());
@@ -199,15 +207,17 @@
         if (my !== gen) return;
         ensurePeer(c.userId);
         try { setPeerState(c.userId, ust.get(c.userId)); } catch (e) {}
+        seen(c.userId);
         lastSent = ''; // 새 친구에게 내 위치를 바로 알려요
         setStatus('on');
       });
-      r.onUserLeave(function (c) { if (my === gen) { dropPeer(c.userId); refreshChip(); } });
+      // 나간 친구는 바로 지우지 않고 잠깐 기다려요(금방 다시 들어올 수 있어요)
+      r.onUserLeave(function (c) { if (my === gen) { var p = peers[c.userId]; if (p) { if (p.st && p.has) { p.left = Date.now(); setAway(p); } else dropPeer(c.userId, true); } refreshChip(); } });
       act.p = r.makeAction('p'); act.e = r.makeAction('e'); act.q = r.makeAction('q'); act.a = r.makeAction('a');
-      act.p.onMessage(function (d, c) { if (my === gen) onPos(c.userId, d); });
-      act.e.onMessage(function (d, c) { if (my === gen) onEmote(c.userId, d); });
-      act.q.onMessage(function (d, c) { if (my === gen) onAsk(c.userId, d); });
-      act.a.onMessage(function (d, c) { if (my === gen) onAnswer(c.userId, d); });
+      act.p.onMessage(function (d, c) { if (my === gen) { seen(c.userId); onPos(c.userId, d); } });
+      act.e.onMessage(function (d, c) { if (my === gen) { seen(c.userId); onEmote(c.userId, d); } });
+      act.q.onMessage(function (d, c) { if (my === gen) { seen(c.userId); onAsk(c.userId, d); } });
+      act.a.onMessage(function (d, c) { if (my === gen) { seen(c.userId); onAnswer(c.userId, d); } });
     } catch (e) { nextStrategy(); }
   }
   function send(name, data, target) {
@@ -221,14 +231,51 @@
   // ------------------------------------------------------------ 친구 아바타
   function ensurePeer(id) {
     if (peers[id]) return peers[id];
-    if (Object.keys(peers).length >= MAX + 2) return null;
-    var p = peers[id] = { id: id, st: null, g: null, sig: '', x: 0, z: 40, yaw: 0, jy: 0, tx: 0, tz: 40, tyaw: 0, tjy: 0, has: false, walk: 0, ph: Math.random() * 10,
+    if (Object.keys(peers).length >= MAX + 4) return null;
+    var p = peers[id] = { id: id, seenT: Date.now(), away: false, awayT: 0, left: 0, st: null, g: null, sig: '', x: 0, z: 40, yaw: 0, jy: 0, tx: 0, tz: 40, tyaw: 0, tjy: 0, has: false, walk: 0, ph: Math.random() * 10,
       bubble: null, bubbleT: 0, beam: null, fbeam: null, lastEmo: 0, helped: false, d: 99, flags: { wave: false, talk: false, look: null }, ent: null, waveT: 0, waveUntil: 0, hfT: 0 };
     return p;
   }
-  function dropPeer(id) {
+  // ------------------------------------------------------------ 끊긴 친구: 잠깐 기다렸다가 내보내기
+  function seen(id) {
+    var p = peers[id];
+    if (!p) { // 내보낸 뒤에 다시 소식이 오면 되살려요
+      p = ensurePeer(id); if (!p) return;
+      try { setPeerState(id, ust.get(id)); } catch (e) {}
+    }
+    p.seenT = Date.now(); p.left = 0;
+    if (p.away) { p.away = false; if (p.bubble && p.g) { p.g.remove(p.bubble); p.bubble = null; } refreshChip(); }
+    rejoinAt = 0; rejoinN = 0;
+  }
+  function setAway(p) {
+    if (p.away) return;
+    p.away = true; p.awayT = Date.now();
+    bubble(p, '💤 잠깐 끊겼어요', 999);
+    if (followId === p.id) stopFollow();
+    if (pendingOut && pendingOut.to === p.id) pendingOut = null;
+    if (pendingIn && pendingIn.from === p.id) clearIncoming(false);
+    refreshChip();
+  }
+  var rejoinAt = 0, rejoinN = 0;
+  function watchPeers() {
+    var now = Date.now(), list = peerList(), lost = false;
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p.away && p.has && now - p.seenT > AWAY_MS) setAway(p);          // 소식이 끊김
+      if (p.away && now - p.awayT > GRACE_MS) { dropPeer(p.id); lost = true; } // 조금 기다렸는데도 안 오면 내보내요
+    }
+    // 친구가 모두 끊겼다면 내 쪽 연결이 끊긴 것일 수 있어요 → 조금 뒤 스스로 다시 들어가요
+    if (lost && !peerList().length && !rejoinAt && rejoinN < 5) rejoinAt = now + 8000;
+    if (rejoinAt && now >= rejoinAt && room && !connecting) {
+      if (peerList().length) rejoinAt = 0;
+      else { rejoinN++; rejoinAt = rejoinN < 5 ? now + 60000 : 0; var s = stratI; leave(); stratI = s; connect(); }
+    }
+  }
+  addEventListener('online', function () { if (room && !liveList().length) { rejoinN = 0; rejoinAt = Date.now() + 1500; } });
+
+  function dropPeer(id, silent) {
     var p = peers[id]; if (!p) return;
-    if (p.st && G.started && !leaving) toast('👋 ' + esc(p.st.k) + iga(p.st.k) + ' 나갔어요.', 1800);
+    if (p.st && G.started && !leaving && !silent && !quiet()) toast('👋 ' + esc(p.st.k) + iga(p.st.k) + ' 나갔어요.', 1800);
     unlist(p);
     if (p.g) { try { G.scene.remove(p.g); } catch (e) {} }
     if (followId === id) followId = null;
@@ -260,10 +307,12 @@
     var sig = JSON.stringify([st.k, st.av]);
     if (sig !== p.sig) { p.sig = sig; buildAvatar(p); }
     if (first) {
-      if (G.started) { toast('🙌 ' + esc(st.k) + iga(st.k) + ' 왔어요!', 2200); sfx('get'); }
+      var back = false;
+      peerList().forEach(function (q) { if (q !== p && q.st && q.st.n === st.n && q.st.k === st.k && (q.away || Date.now() - q.seenT > 3000)) { back = true; dropPeer(q.id, true); } });
+      if (G.started && !quiet()) { toast((back ? '🙌 ' + esc(st.k) + iga(st.k) + ' 다시 왔어요!' : '🙌 ' + esc(st.k) + iga(st.k) + ' 왔어요!'), 2200); sfx('get'); }
       baseMilestone();
     } else {
-      if (st.st > old.st && G.started) { toast('👏 ' + esc(st.k) + iga(st.k) + ' 미션 ' + st.st + '을 끝냈어요!', 2600); sfx('get'); }
+      if (st.st > old.st && G.started && !quiet()) { toast('👏 ' + esc(st.k) + iga(st.k) + ' 미션 ' + st.st + '을 끝냈어요!', 2600); sfx('get'); }
       if (st.h && !old.h) { p.helped = false; if (G.started) { toast('🆘 ' + esc(st.k) + iga(st.k) + ' 도와 달래요! 주황 빛기둥을 찾아가요.', 3600); sfx('get'); } }
     }
     setBeam(p, !!st.h);
@@ -335,12 +384,12 @@
     if (!G.dlgOpen) setTimeout(function () { try { G.speak('High five!', '나'); } catch (e) {} }, 700);
   }
 
-  // ------------------------------------------------------------ 모둠 퀘스트 (5분마다 바뀌는 선택 활동)
+  // ------------------------------------------------------------ 우리 반 퀘스트 (5분마다 바뀌는 선택 활동)
   var QUEST_MS = 300000, QUEST_DAY = 6;
   var quest = { e: 0, p: 0, done: false, told: 0 };
   var QUESTS = [
     { t: '친구에게 영어로 묻고 대답 듣기', how: '친구 옆에서 E 를 눌러 영어로 물어봐요.', goal: function (m) { return Math.max(2, Math.min(m, 4)); } },
-    { t: '친구 옆에 모여 👋 Hi! 하기', how: '친구 가까이 가서 숫자 키 1 (👋) 을 눌러요.', goal: function (m) { return Math.max(2, Math.ceil(m * 0.6)); } },
+    { t: '친구 옆에 모여 👋 Hi! 하기', how: '친구 가까이 가서 숫자 키 1 (👋) 을 눌러요.', goal: function (m) { return Math.max(2, Math.min(12, Math.ceil(m * 0.6))); } },
     { t: '도와 달라는 친구에게 가 주기', how: '누가 5 (🆘) 를 누르면 주황 빛기둥으로 가요.', goal: function () { return 2; } }
   ];
   var qEpoch = function () { return Math.floor(Date.now() / QUEST_MS); };
@@ -370,7 +419,7 @@
     if (qi.members < 2) return;
     if (!quest.done && quest.told !== quest.e && !G.dlgOpen && !G.busy) {
       quest.told = quest.e;
-      toast('🎯 <b>모둠 퀘스트</b>: ' + qi.q.t + '<br><small>' + qi.q.how + '</small>', 4200);
+      toast('🎯 <b>우리 반 퀘스트</b>: ' + qi.q.t + '<br><small>' + qi.q.how + '</small>', 4200);
     }
     if (quest.done || qi.sum < qi.goal) return;
     quest.done = true; quest.told = quest.e;
@@ -382,8 +431,8 @@
     if (rec.n < QUEST_DAY) {
       rec.n++; lsSet('english3d_mp_qday', rec);
       try { G.addStar(1); } catch (e) {}
-      toast('🎉 <b>모둠 퀘스트 성공!</b> 모두 별 +1 ⭐', 3600);
-    } else toast('🎉 <b>모둠 퀘스트 성공!</b> 다 같이 잘했어요!', 3600);
+      toast('🎉 <b>우리 반 퀘스트 성공!</b> 모두 별 +1 ⭐', 3600);
+    } else toast('🎉 <b>우리 반 퀘스트 성공!</b> 다 같이 잘했어요!', 3600);
     pushState();
   }
 
@@ -433,7 +482,7 @@
     pushState();
   }
 
-  // ------------------------------------------------------------ 창 (묻기·대답하기·모둠)
+  // ------------------------------------------------------------ 창 (묻기·대답하기·우리 반)
   var panel = el('div'); panel.id = 'mpPanel';
   var pTitle = el('div', 'mpT'), pEn = el('div', 'mpEn'), pKo = el('div', 'mpKo'), pBody = el('div', 'mpCh'), pX = el('button', 'mpX', '닫기 (Esc)');
   pX.type = 'button';
@@ -556,7 +605,7 @@
     setTimeout(function () { if (peers[id]) reward(peers[id], '친구와 영어로 이야기했어요!'); }, 900);
   }
 
-  // ------------------------------------------------------------ 모둠 칸 (HUD)
+  // ------------------------------------------------------------ 우리 반 칸 (HUD)
   var chip = el('button'); chip.id = 'mpChip'; chip.type = 'button';
   var chipText = el('span'), chipBar = el('i'), chipFill = el('b'), chipQuest = el('em');
   chipBar.appendChild(chipFill); chip.appendChild(chipText); chip.appendChild(chipBar); chip.appendChild(chipQuest);
@@ -571,15 +620,15 @@
     chip.classList.toggle('show', !!me && G.started && status !== 'off');
     chip.classList.toggle('alone', n === 0);
     chipQuest.style.display = n ? '' : 'none';
-    if (status === 'wait' && !n) chipText.textContent = '📡 모둠 ' + group + ' · 연결하는 중…';
+    if (status === 'wait' && !n) chipText.textContent = '📡 우리 반 · 연결하는 중…';
     else if (status === 'solo') chipText.textContent = '🙂 혼자 하는 중 (연결 안 됨)';
-    else if (status === 'full') chipText.textContent = '👥 모둠 ' + group + ' 꽉 찼어요';
-    else if (!n) chipText.textContent = '🟢 모둠 ' + group + ' · 친구 0명 · 기다려요';
+    else if (status === 'full') chipText.textContent = '👥 우리 반 방이 꽉 찼어요';
+    else if (!n) chipText.textContent = '🟢 우리 반 · 친구 0명 · 기다려요';
     else {
       var step = 15 * (n + 1), sum = groupSum();
-      chipText.textContent = '🟢 모둠 ' + group + ' · ' + (n + 1) + '명 · 우리 모둠 ⭐ ' + sum;
+      chipText.textContent = '🟢 우리 반 · ' + (n + 1) + '명 · 모은 별 ⭐ ' + sum;
       var qi = questInfo();
-      chipQuest.textContent = qi.done ? '🎯 모둠 퀘스트 성공! 🎉' : '🎯 ' + qi.q.t + ' ' + qi.sum + '/' + qi.goal;
+      chipQuest.textContent = qi.done ? '🎯 우리 반 퀘스트 성공! 🎉' : '🎯 ' + qi.q.t + ' ' + qi.sum + '/' + qi.goal;
       chipQuest.classList.toggle('done', qi.done);
       chipFill.style.width = Math.round((sum % step) / step * 100) + '%';
       if (mileMembers !== n + 1 || mileBase < 0) baseMilestone();
@@ -587,17 +636,17 @@
         var m = Math.floor(sum / step);
         if (m > mileBase) {
           mileBase = m;
-          if (G.started) { try { G.confetti(45); } catch (e) {} sfx('star'); toast('🎉 우리 모둠 별 ' + (m * step) + '개 달성! 다 같이 잘했어요!', 3200); }
+          if (G.started) { try { G.confetti(45); } catch (e) {} sfx('star'); toast('🎉 우리 반 별 ' + (m * step) + '개 달성! 다 같이 잘했어요!', 3200); }
         } else if (m < mileBase) mileBase = m;
       }
     }
   }
   function openGroupPanel() {
     openPanel({
-      title: '👥 함께 하기 · 모둠 ' + group,
-      ko: status === 'solo' ? '지금은 연결이 안 돼서 혼자 하는 중이에요. 조금 뒤에 다시 이어 볼게요.' : '같은 모둠 친구와 한 공간에서 만나요. 친구 옆에서 E 를 누르면 영어로 물어볼 수 있어요.',
+      title: '👥 함께 하기 · 우리 반 ' + (liveList().length + 1) + '명',
+      ko: status === 'solo' ? '지금은 연결이 안 돼서 혼자 하는 중이에요. 조금 뒤에 다시 이어 볼게요.' : '같은 반 친구와 한 공간에서 만나요. 친구 옆에서 E 를 누르면 영어로 물어볼 수 있어요.',
       build: function (body) {
-        var list = el('div', 'mpList');
+        var list = el('div', 'mpList'); list.style.maxHeight = '34vh'; list.style.overflowY = 'auto';
         var S = G.S || {};
         var rows = [{ r: { k: me.nick + ' (나)', st: int(S.stage, 0, 6), s: int(S.stars, 0, 99999) }, p: null }].concat(liveList().map(function (p) { return { r: p.st, p: p }; }));
         rows.forEach(function (row) {
@@ -610,10 +659,10 @@
         if (liveList().length) {
           var qi = questInfo();
           var qd = el('div', 'mpQuest' + (qi.done ? ' done' : ''));
-          qd.appendChild(el('b', '', '🎯 모둠 퀘스트 · ' + (qi.done ? '성공! 🎉' : qi.sum + '/' + qi.goal)));
+          qd.appendChild(el('b', '', '🎯 우리 반 퀘스트 · ' + (qi.done ? '성공! 🎉' : qi.sum + '/' + qi.goal)));
           qd.appendChild(el('span', '', qi.q.t + ' — ' + (qi.done ? '조금 뒤에 새 퀘스트가 나와요.' : qi.q.how)));
           body.appendChild(qd);
-        } else body.appendChild(el('div', 'mpSub', '친구가 들어오면 모둠 퀘스트가 시작돼요. 같은 단원, 같은 모둠 친구만 보여요.'));
+        } else body.appendChild(el('div', 'mpSub', '친구가 들어오면 우리 반 퀘스트가 시작돼요. 같은 반, 같은 단원 친구가 보여요.'));
         body.appendChild(el('div', 'mpSub', '인사말 (숫자 키 1~5) · 가까이서 서로 👋 하면 하이파이브!'));
         var em = el('div', 'mpEmo');
         EMO.slice(0, 5).forEach(function (e, i) {
@@ -622,26 +671,9 @@
           em.appendChild(b);
         });
         body.appendChild(em);
-        body.appendChild(el('div', 'mpSub', '모둠 바꾸기 (한 모둠에 ' + MAX + '명까지)'));
-        var gr = el('div', 'mpGroups');
-        var maxG = Math.max(5, Math.ceil(me.num / MAX));
-        for (var i = 1; i <= maxG; i++) (function (i) {
-          var b = el('button', i === group ? 'cur' : '', '모둠 ' + i); b.type = 'button';
-          b.onclick = function () { closePanel(true); setGroup(i); };
-          gr.appendChild(b);
-        })(i);
-        body.appendChild(gr);
       }
     });
   }
-  function setGroup(g) {
-    g = int(g, 1, 20); if (g === group && room) return;
-    group = g; lsSet('english3d_mp_group', { c: me.code, g: g });
-    leave(); stratI = 0; mileBase = -1;
-    toast('👥 모둠 ' + g + '(으)로 옮겼어요.', 2000);
-    connect();
-  }
-
   // ------------------------------------------------------------ 터치용 이모트 단추
   var emoBtn = el('button', '', '👋'); emoBtn.id = 'mpEmoBtn'; emoBtn.type = 'button'; document.body.appendChild(emoBtn);
   emoBtn.onclick = function () { if (!panelOpen && !G.dlgOpen && !G.busy && G.started) openGroupPanel(); };
@@ -656,16 +688,13 @@
     if (!liveList().length && !Object.keys(peers).length) return;
     var P = G.P, msg = [r2(P.x), r2(P.z), r2(P.yaw), r2(P.jy || 0)], sig = msg.join(','), now = Date.now();
     if (sig === lastSent && now - lastSentT < 2000) return;
+    var nn = peerList().length; if (now - lastSentT < (nn > 25 ? 580 : nn > 10 ? 380 : 0)) return; // 11명부터 0.4초, 26명부터 0.6초마다
     lastSent = sig; lastSentT = now;
     send('p', msg);
   }, SEND_MS);
   setInterval(function () {
     if (!me) {
       me = readProfile();
-      if (me) {
-        var g = lsGet('english3d_mp_group');
-        group = g && g.c === me.code ? int(g.g, 1, 20) : Math.max(1, Math.ceil(me.num / MAX));
-      }
     }
     if (me && G.started && !room && !connecting && status === 'off') connect();
     if (!room) return;
@@ -673,6 +702,7 @@
     var now = Date.now();
     if (pendingOut && now - pendingOut.t > 30000) { var p = peers[pendingOut.to]; pendingOut = null; if (p && p.st) toast('🙂 ' + esc(p.st.k) + iga(p.st.k) + ' 바쁜가 봐요. 조금 뒤에 다시 물어봐요.', 2400); }
     if (pendingIn && now - pendingIn.t > 25000 && !(panelOpen && panelClose === answerClosed)) clearIncoming(true);
+    watchPeers();
     questCheck();
     refreshChip();
   }, 1000);
@@ -703,7 +733,7 @@
       } catch (e) {}
       if (p.bubble && (p.bubbleT -= dt) <= 0) { p.g.remove(p.bubble); p.bubble = null; }
       p.d = Math.hypot(p.x - P.x, p.z - P.z);
-      if (p.st && p.d < bd) { bd = p.d; best = p; }
+      if (p.st && !p.away && p.d < bd) { bd = p.d; best = p; }
       // 도와 달라는 친구에게 가면
       if (p.st && p.st.h && !p.helped && p.d < 3 && G.started) {
         p.helped = true; send('e', 5, p.id);
@@ -748,10 +778,10 @@
     map: drawMap,
     emote: emote,
     debug: function () {
-      return { status: status, strat: STRATS[stratI], room: me ? roomId() : '', group: group, sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
-        peers: peerList().map(function (p) { return { id: p.id, k: p.st && p.st.k, n: p.st && p.st.n, av: p.st && p.st.av, d: r2(p.d), st: p.st && p.st.st, s: p.st && p.st.s, h: p.st && p.st.h, x: r2(p.tx), z: r2(p.tz), has: p.has, vis: !!(p.g && p.g.visible) }; }) };
+      return { status: status, strat: STRATS[stratI], room: me ? roomId() : '', sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
+        peers: peerList().map(function (p) { return { id: p.id, k: p.st && p.st.k, n: p.st && p.st.n, av: p.st && p.st.av, d: r2(p.d), st: p.st && p.st.st, s: p.st && p.st.s, h: p.st && p.st.h, x: r2(p.tx), z: r2(p.tz), has: p.has, away: p.away, vis: !!(p.g && p.g.visible) }; }) };
     },
-    _test: isDev ? { openAsk: function () { var p = liveList()[0]; if (p) openAsk(p); }, openAnswer: openAnswer, pick: function (i) { if (panelKeys && panelKeys[i]) panelKeys[i].click(); }, group: openGroupPanel, setGroup: setGroup, leave: function () { leave(); status = 'off'; }, askN: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) openAsk(p); }, follow: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) startFollow(p); }, questType: function (ty) { qEpoch = function () { return ty; }; questRoll(); quest.done = false; quest.p = 0; } } : null
+    _test: isDev ? { openAsk: function () { var p = liveList()[0]; if (p) openAsk(p); }, openAnswer: openAnswer, pick: function (i) { if (panelKeys && panelKeys[i]) panelKeys[i].click(); }, group: openGroupPanel, leave: function () { leave(); status = 'off'; }, askN: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) openAsk(p); }, follow: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) startFollow(p); }, questType: function (ty) { qEpoch = function () { return ty; }; questRoll(); quest.done = false; quest.p = 0; } } : null
   };
 
   // 개발용 기록: ?mplog=1 (로컬에서만)
