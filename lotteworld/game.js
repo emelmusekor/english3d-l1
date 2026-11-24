@@ -300,7 +300,7 @@ function gfxTick(dt, now) {
   fx2Tick(dt, now / 1000);
 }
 // 개발용: ?perf 로 그리기 횟수(draw call)·삼각형 수를 재요
-try { if (new URLSearchParams(location.search).has('perf')) setTimeout(() => { let now = performance.now(); for (let i = 0; i < 8; i++) { now += 400; update(0.05, now / 1000); gfxTick(0.4, now); renderer.render(scene, camera); } const r = renderer.info.render; let meshes = 0; scene.traverse(o => { if (o.isMesh && o.visible) meshes++; }); document.title = 'PERF calls=' + r.calls + ' tris=' + r.triangles + ' geo=' + renderer.info.memory.geometries + ' meshes=' + meshes + ' people=' + Object.keys(NPC).length; }, 2500); } catch (e) {}
+try { if (new URLSearchParams(location.search).has('perf')) setTimeout(() => { let now = performance.now(); for (let i = 0; i < 8; i++) { now += 400; update(0.05, now / 1000); gfxTick(0.4, now); renderer.render(scene, camera); } const r = renderer.info.render; let meshes = 0; scene.traverse(o => { if (o.isMesh && o.visible) meshes++; }); document.title = 'PERF calls=' + r.calls + ' tris=' + r.triangles + ' geo=' + renderer.info.memory.geometries + ' meshes=' + meshes + ' people=' + Object.keys(NPC).length + ' merged=' + MERGE.before + '→' + MERGE.groups + ' reverted=' + MERGE.reverted; }, 4500); } catch (e) {}
 // 사람 한 명 움직이기. f = { talk: 말하는 중, wave: 손 흔들기, look: [x, z] 바라볼 곳 }
 function animatePerson(g, t, dt, f) {
   const a = g.userData.anim; if (!a || !g.visible) return;
@@ -513,8 +513,99 @@ function decorate() {
   const pts = new THREE.Points(pg, new THREE.PointsMaterial({ size: FX2.snow ? 0.11 : 0.06, color: FX2.snow ? 0xffffff : 0xfff3bf, transparent: true, opacity: FX2.snow ? 0.9 : 0.7, depthWrite: false }));
   pts.frustumCulled = false; scene.add(pts); FX2.pollen = { pts, base, n };
 }
+
+// ---------- 움직이지 않는 물체 합치기: 같은 색(재질)의 상자·기둥·공을 16m 구역마다 하나로 합쳐 그리기 횟수를 줄여요 ----------
+//  · 대상: 장면에 바로 붙은 Mesh, 무늬 없는 불투명 재질, 바닥이 1m 아래(지붕·천장처럼 2.5D 에서 숨겨야 하는 것은 빼요)
+//  · 그 뒤에 그 물체를 옮기거나 숨기면 반영되지 않아요 → 개발용 ?mergecheck 로 찾아서 userData.keep = 1 로 빼요
+const MERGE = { done: false, list: [], recs: [], groups: 0, before: 0, reverted: 0 };
+function mergeGuard() {
+  for (let i = MERGE.recs.length - 1; i >= 0; i--) {
+    const r = MERGE.recs[i]; let bad = false;
+    for (const it of r.items) { const o = it.o; if (o.visible || !mergeVisibleFrom(o) || !o.matrixWorld.equals(it.m)) { bad = true; break; } }
+    if (!bad) continue;
+    scene.remove(r.mm); r.mm.geometry.dispose();
+    try { const o = r.items[0].o, e = o.matrixWorld.elements; (MERGE.log = MERGE.log || []).push(r.items.length + 'x' + o.geometry.type.replace('Geometry', '') + '@' + e[12].toFixed(0) + ',' + e[14].toFixed(0) + '#' + o.material.color.getHexString()); } catch (er) {}
+    for (const it of r.items) { const o = it.o; o.userData.keep = 1; o.userData.mergedInto = null; if (!o.visible) o.visible = true; }
+    MERGE.recs.splice(i, 1); MERGE.reverted++;
+  }
+}
+function mergeVisibleFrom(o) { for (let a = o.parent; a; a = a.parent) { if (!a.visible) return false; if (a === scene) return true; } return false; } // 위쪽(부모들)이 아직 장면에 보이게 붙어 있나
+function mergeStatic() {
+  if (MERGE.done) return; MERGE.done = true;
+  let qs0; try { qs0 = new URLSearchParams(location.search); } catch (e) { return; }
+  if (qs0.has('nomerge')) return;
+  try { polish(scene); } catch (e) {}
+  scene.updateMatrixWorld(true);
+  const skip = new Set([sky, clouds, camera]);
+  try { if (typeof decor !== 'undefined' && Array.isArray(decor)) decor.forEach(o => skip.add(o)); } catch (e) {}
+  try { items.forEach(i => skip.add(i.mesh)); } catch (e) {}
+  try { Object.values(NPC).forEach(n => skip.add(n.g)); } catch (e) {}
+  const CELL = 16, cand = [], b3 = new THREE.Box3();
+  const ok = (o) => { // 이 물체를 합쳐도 되나
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible) return false;
+    const u = o.userData; if (u.anim || u.keep || u.grass || u.merged || u.dyn || u.play) return false;
+    const m = o.material; if (!m || Array.isArray(m) || m.transparent || m.map || m.alphaMap || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial)) return false;
+    const g = o.geometry; if (!g || !g.attributes.position || !g.attributes.normal || g.morphAttributes.position || g.attributes.position.count > 4000) return false;
+    if (g.type === 'PlaneGeometry' && (g.parameters.width * g.parameters.height) >= 300) return false;
+    return true;
+  };
+  const visit = (o) => { // 위에서부터 내려가요. 움직이는 묶음·사람·물건은 통째로 건너뛰어요
+    if (skip.has(o) || !o.visible || o.isLight || o.isSprite || o.isPoints || o.isInstancedMesh) return;
+    const u = o.userData; if (u.anim || u.keep || u.dyn || u.play || u.tag || u.merged) return;
+    if (o.isMesh) {
+      if (!ok(o)) return;
+      b3.setFromObject(o); if (b3.isEmpty()) return;
+      if (b3.min.y >= 1.0 && b3.max.x - b3.min.x >= 0.9 && b3.max.z - b3.min.z >= 0.9) return; // 지붕·천장처럼 높고 넓은 것은 2.5D 에서 숨기니까 빼요 (창문 같은 얇은 것은 합쳐요)
+      const cx = Math.floor((b3.min.x + b3.max.x) / 2 / CELL), cz = Math.floor((b3.min.z + b3.max.z) / 2 / CELL);
+      cand.push({ o, key: o.material.uuid + '|' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '|' + cx + ',' + cz, m0: o.matrixWorld.clone() });
+    }
+    for (const c of o.children) visit(c);
+  };
+  for (const c of scene.children) visit(c);
+  // 2초 동안 지켜봐요: 그새 움직이거나 숨겨진 것(돌아가는 놀이기구, 지나가는 차, 흔들리는 풍선 등)은 빼고 합쳐요
+  setTimeout(() => { try { mergeBuild(cand, qs0); } catch (e) { console.warn(e); } }, 2000);
+}
+function mergeVisible(o) { for (let a = o; a; a = a.parent) { if (!a.visible) return false; if (a === scene) return true; } return false; }
+function mergeBuild(cand, qs0) {
+  scene.updateMatrixWorld(true);
+  const groups = new Map();
+  for (const c of cand) {
+    const o = c.o; if (o.userData.keep || !mergeVisible(o) || !o.matrixWorld.equals(c.m0)) continue;
+    let gr = groups.get(c.key); if (!gr) groups.set(c.key, gr = []); gr.push(o);
+  }
+  for (const gr of groups.values()) {
+    if (gr.length < 2) continue;
+    let nv = 0, ni = 0; for (const o of gr) { nv += o.geometry.attributes.position.count; ni += o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count; }
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+    let vo = 0, io = 0;
+    for (const o of gr) {
+      const g = o.geometry, P0 = g.attributes.position, N0 = g.attributes.normal, mw = o.matrixWorld; nm.getNormalMatrix(mw);
+      for (let i = 0; i < P0.count; i++) {
+        v.fromBufferAttribute(P0, i).applyMatrix4(mw); pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+        v.fromBufferAttribute(N0, i).applyMatrix3(nm).normalize(); nor[(vo + i) * 3] = v.x; nor[(vo + i) * 3 + 1] = v.y; nor[(vo + i) * 3 + 2] = v.z;
+      }
+      if (g.index) { const I = g.index.array; for (let k = 0; k < I.length; k++) idx[io + k] = I[k] + vo; io += I.length; }
+      else { for (let k = 0; k < P0.count; k++) idx[io + k] = vo + k; io += P0.count; }
+      vo += P0.count;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingBox(); geo.computeBoundingSphere();
+    const mm = new THREE.Mesh(geo, gr[0].material); mm.castShadow = gr[0].castShadow; mm.receiveShadow = gr[0].receiveShadow;
+    mm.userData.merged = gr.length; mm.userData.pol = 1; mm.matrixAutoUpdate = false; mm.updateMatrix();
+    scene.add(mm);
+    // 원래 물체는 숨겨 둬요(카메라 가림 계산·다른 코드의 참조는 그대로 써요)
+    const rec = { mm, items: gr.map(o => ({ o, m: o.matrixWorld.clone() })) };
+    for (const o of gr) { o.visible = false; o.userData.mergedInto = mm; MERGE.list.push({ o, m: o.matrixWorld.clone() }); }
+    MERGE.recs.push(rec);
+    MERGE.groups++; MERGE.before += gr.length;
+  }
+  if (!MERGE.timer) MERGE.timer = setInterval(() => { try { mergeGuard(); } catch (e) {} }, 500);
+  if (qs0.has('mergecheck')) setInterval(() => { if (MERGE.log && MERGE.log.length) document.documentElement.dataset.mergebad = MERGE.reverted + ' ' + MERGE.log.slice(0, 30).join(' ; '); }, 1000);
+}
 function fx2Tick(dt, t) {
-  if (!FX2.ready) { FX2.ready = true; try { detailWorld(); } catch (e) { console.warn(e); } try { decorate(); } catch (e) { console.warn(e); } initUI2(); }
+  if (!FX2.ready) { FX2.ready = true; try { detailWorld(); } catch (e) { console.warn(e); } try { decorate(); } catch (e) { console.warn(e); } initUI2(); try { mergeStatic(); } catch (e) { console.warn(e); } }
   for (const f of FX2.tickers) f(dt, t);
   FX2.butter.forEach((b, i) => {
     b.G.visible = GFX.high || i < 2; if (!b.G.visible) return;
@@ -1005,7 +1096,8 @@ const darkGlass = new THREE.MeshStandardMaterial({ color: 0x1f2d3a, roughness: 0
 const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe3e6, roughness: 0.22, metalness: 0.75 });
 const goldM = new THREE.MeshStandardMaterial({ color: 0xd4a017, roughness: 0.3, metalness: 0.65 });
 const tireM = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.9 });
-const lampM = (c, k = 0.9) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
+const glowM = {}; const glow = (c, e, k) => glowM[c + '_' + e + '_' + k] || (glowM[c + '_' + e + '_' + k] = new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: k })); // 같은 빛 재질은 하나로 (합치기 쉽게)
+const lampM = (c, k = 0.9) => glow(c, c, k);
 function rrect(rw, rh, r) { const s = new THREE.Shape(), x = -rw / 2, y = -rh / 2; s.moveTo(x + r, y); s.lineTo(x + rw - r, y); s.quadraticCurveTo(x + rw, y, x + rw, y + r); s.lineTo(x + rw, y + rh - r); s.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh); s.lineTo(x + r, y + rh); s.quadraticCurveTo(x, y + rh, x, y + rh - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s; }
 // 둥근 상자: 단면(가로 rw × 세로 rh, 모서리 r)을 길이 len 만큼 민 것. 길이 방향은 z
 function rbox(rw, rh, len, r, material) { const g = new THREE.ExtrudeGeometry(rrect(rw, rh, r), { depth: len, bevelEnabled: false, curveSegments: 5 }); g.translate(0, 0, -len / 2); return new THREE.Mesh(g, material); }
@@ -1400,8 +1492,8 @@ function euroHouse(x, z, w, h, wallC, roofC, ry) {
   const roof = new THREE.Mesh(new THREE.ConeGeometry(0.72, 1, 4), mat(roofC)); roof.rotation.y = Math.PI / 4; roof.scale.set(w, 2.2, d + 0.5); roof.position.y = h + 1.1; g.add(roof);
   for (const y of [h * 0.48, h - 0.12]) box(w + 0.04, 0.16, 0.08, 0x5c4033, 0, y, d / 2 + 0.03, g);
   for (const dx of [-w / 2 + 0.1, 0, w / 2 - 0.1]) box(0.16, h, 0.08, 0x5c4033, dx, h / 2, d / 2 + 0.03, g);
-  for (const dx of [-w / 4, w / 4]) { const wn = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.08), new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc94d, emissiveIntensity: 0.55 })); wn.position.set(dx, h * 0.74, d / 2 + 0.05); g.add(wn); }
-  box(0.9, 1.7, 0.08, 0x7a4a1e, -w / 4, 0.85, d / 2 + 0.05, g); { const sh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.08), new THREE.MeshStandardMaterial({ color: 0xd0ebff, emissive: 0x74c0fc, emissiveIntensity: 0.25 })); sh.position.set(w / 4, 1.1, d / 2 + 0.05); g.add(sh); }
+  for (const dx of [-w / 4, w / 4]) { const wn = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.08), glow(0xffe9a8, 0xffc94d, 0.55)); wn.position.set(dx, h * 0.74, d / 2 + 0.05); g.add(wn); }
+  box(0.9, 1.7, 0.08, 0x7a4a1e, -w / 4, 0.85, d / 2 + 0.05, g); { const sh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.08), glow(0xd0ebff, 0x74c0fc, 0.25)); sh.position.set(w / 4, 1.1, d / 2 + 0.05); g.add(sh); }
   const hw = (Math.abs(Math.sin(ry)) > 0.5 ? d : w) / 2, hd = (Math.abs(Math.sin(ry)) > 0.5 ? w : d) / 2; block(x - hw, z - hd, x + hw, z + hd);
   return g;
 }
@@ -1422,6 +1514,9 @@ for (let k = 0; k < 7; k++) box(0.5, 0.5, 0.5, 0xf8f9fa, -37 + k, 4.85, -43.7);
 { const X = -41, Z = -39.6; for (const s of [-1, 1]) { const leg = cyl(0.16, 0.2, 8.2, 0x1c7ed6, X, 3.9, Z + s * 1.5); leg.rotation.x = s * 0.36; } box(0.5, 0.5, 3.4, 0x1c7ed6, X, 7.7, Z);
   const arm = new THREE.Group(); arm.position.set(X, 7.6, Z); cyl(0.12, 0.12, 5.4, 0xffd43b, 0, -2.7, 0, arm); const disc = cyl(1.5, 1.5, 0.35, 0xe03131, 0, -5.4, 0, arm, 18); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; box(0.3, 0.5, 0.3, 0x343a40, Math.cos(a) * 1.3, -5.05, Math.sin(a) * 1.3, arm); }
   scene.add(arm); LWFX.swing = arm; block(X - 0.5, Z - 1.9, X + 0.5, Z + 1.9); sign('자이로스윙\n키 130~190cm', 0.7, X + 0.8, 1.5, Z + 2.4, 0, { fs: 38, bg: '#1c7ed6', fg: '#ffffff' }); }
+
+// 움직이는 것은 합치기(엔진의 mergeStatic)에서 빼요
+DRIVE.car.userData.dyn = 1; TRAFFIC.forEach(c => { c.g.userData.dyn = 1; }); BUSIN.marks.forEach(k => { k.m.userData.dyn = 1; });
 
 // ======================================================================= 디자인 손질 (겉면 그림 · 실내 2~3층 벽 · 통로 · 버스 · 운동장)
 function canvasTex(cw, ch, draw) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; draw(c.getContext('2d'), cw, ch); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t; }
@@ -1477,14 +1572,14 @@ for (const [x, z] of [[29.9, 45], [30, 24]]) prop(lampPost2, x, z);
 for (let x = -7.5; x <= 7.5; x += 3) for (const z of [BUSIN.z1, BUSIN.z2]) { if (z === BUSIN.z2 && x > 5) continue; const g = new THREE.Mesh(new THREE.BoxGeometry(2.86, 1.4, 0.04), new THREE.MeshStandardMaterial({ color: 0xbfe3f5, transparent: true, opacity: 0.2, depthWrite: false })); g.position.set(x, 1.75, z); g.userData.ns = 1; scene.add(g); }
 for (let x = -9; x <= 9; x += 3) box(0.08, 0.08, 4.0, 0xadb5bd, x, 2.5, BUSIN.zc);
 for (const z of [BUSIN.z1 + 0.32, BUSIN.z2 - 0.32]) box(17.6, 0.06, 0.5, 0xdee2e6, 0, 2.25, z);
-{ const l = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 0.3), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3bf, emissiveIntensity: 0.9 })); l.position.set(-0.5, 2.5, BUSIN.zc); l.userData.ns = 1; scene.add(l); }
+{ const l = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 0.3), glow(0xffffff, 0xfff3bf, 0.9)); l.position.set(-0.5, 2.5, BUSIN.zc); l.userData.ns = 1; scene.add(l); }
 for (const z of [-2.12, 4.52]) { box(92, 2.0, 0.1, 0x8fa3ad, 0, 1.0, z); const p = new THREE.Mesh(new THREE.BoxGeometry(92, 1.5, 0.06), new THREE.MeshStandardMaterial({ color: 0xcfe8f5, transparent: true, opacity: 0.55 })); p.position.set(0, 2.75, z); scene.add(p); box(92, 0.12, 0.14, 0xffffff, 0, 3.55, z); }
 // ----- 롯데월드 지하 1층 통로: 천장·조명·가게·안내판 -----
 for (const cx of [-14, 10, 34]) { const c = box(24, 0.25, 6.7, 0xf8f0e3, cx, 4.75, -6.1); c.userData.ns = 1; }
-for (let x = -23; x <= 43; x += 6) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.5), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3bf, emissiveIntensity: 1 })); l.position.set(x, 4.6, -6.1); l.userData.ns = 1; scene.add(l); }
+for (let x = -23; x <= 43; x += 6) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.5), glow(0xffffff, 0xfff3bf, 1)); l.position.set(x, 4.6, -6.1); l.userData.ns = 1; scene.add(l); }
 [[-16, '🎁 기념품 가게', 0xe8590c], [-2.4, '☕ 카페', 0x2f9e44], [11.6, '📷 사진관', 0x5f3dc4], [17.4, '🧸 캐릭터 숍', 0xd6336c]].forEach(([x, name, c]) => {
   box(5, 0.24, 0.9, c, x, 3.05, -3.05); for (let k = 0; k < 5; k++) box(0.5, 0.26, 0.92, 0xffffff, x - 2 + k, 3.05, -3.05);
-  const g = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.3, 0.08), new THREE.MeshStandardMaterial({ color: 0xd0ebff, emissive: 0xfff3bf, emissiveIntensity: 0.35 })); g.position.set(x, 1.3, -2.66); scene.add(g);
+  const g = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.3, 0.08), glow(0xd0ebff, 0xfff3bf, 0.35)); g.position.set(x, 1.3, -2.66); scene.add(g);
   box(4.6, 0.3, 0.12, 0x5c4033, x, 0.15, -2.68); for (const dx of [-2.25, 0, 2.25]) box(0.12, 2.6, 0.12, 0x5c4033, x + dx, 1.3, -2.68);
   sign(name, 0.44, x, 3.62, -2.7, N, { fs: 44, bg: '#ffffff', fg: '#333333' });
 });
