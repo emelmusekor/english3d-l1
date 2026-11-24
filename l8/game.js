@@ -1663,7 +1663,15 @@ function orderTask(who, en, ko, seq, labels) {
     });
   });
 }
-ui.next.onclick = () => dlgNextFn && dlgNextFn();
+// 다음 대사로: 읽던 소리를 멈추고 바로 넘어가요 (말이 다 끝날 때까지 기다리지 않아요)
+function skipLine() { if (!dlgNextFn || !ui.dlg.classList.contains('show')) return false; try { speechSynthesis.cancel(); } catch (e) {} const f = dlgNextFn; f(); return true; }
+ui.next.onclick = (e) => { if (e) e.stopPropagation(); skipLine(); };
+// 대화 상자의 빈 곳이나 글자를 눌러도 넘어가요 (단추·보기는 그대로)
+ui.dlg.addEventListener('click', (e) => { if (e.target.closest('button, a, input, select, label')) return; skipLine(); });
+// 대화가 떠 있을 때 화면(3D)을 눌러도 넘어가요
+let downInDlg = false; // 말을 거는 그 클릭이 첫 대사를 바로 넘기지 않게: 대화가 떠 있을 때 누른 것만 넘겨요
+canvas.addEventListener('pointerdown', () => { downInDlg = dlgOpen && !!dlgNextFn && ui.dlg.classList.contains('show'); });
+canvas.addEventListener('pointerup', () => { if (downInDlg && dlgOpen && dlgNextFn && !dlgChoiceKeys && ui.dlg.classList.contains('show')) skipLine(); downInDlg = false; });
 ui.spk.onclick = () => lastSpeech && speak(...lastSpeech);
 ui.peek.onclick = () => { ui.en.classList.remove('hidden'); ui.peek.style.display = 'none'; };
 
@@ -2102,7 +2110,7 @@ const bethTalk = NPC.bonus.talk;
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (dlgOpen) {
-    if (['Space', 'Enter', 'KeyE'].includes(e.code) && dlgNextFn && ui.dlg.classList.contains('show')) { e.preventDefault(); dlgNextFn(); }
+    if (['Space', 'Enter', 'KeyE'].includes(e.code) && dlgNextFn && ui.dlg.classList.contains('show')) { e.preventDefault(); skipLine(); }
     if (dlgChoiceKeys && /^Digit[1-6]$/.test(e.code)) { const b = dlgChoiceKeys[+e.code.slice(5) - 1]; if (b) b.click(); }
     if (e.code === 'KeyR' && lastSpeech) speak(...lastSpeech);
     return;
@@ -2151,7 +2159,7 @@ canvas.addEventListener('touchmove', (e) => {
 }, { passive: false });
 const endTouch = (e) => { for (const t of e.changedTouches) { if (t.identifier === joyId) { joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; knob.style.transform = ''; } if (t.identifier === lookId) lookId = null; } };
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
-$('#actBtn').addEventListener('click', interact);
+$('#actBtn').addEventListener('click', () => { if (dlgOpen) { skipLine(); return; } interact(); }); // 대화 중에는 '다음'
 function jump() { if (!started || dlgOpen || P.jy > 0) return; P.vy = 5.2; P.jy = 0.001; beep('jump'); coachDone('jump'); }
 const jumpBtn = document.createElement('button'); jumpBtn.id = 'jumpBtn'; jumpBtn.textContent = '점프'; document.body.appendChild(jumpBtn);
 jumpBtn.addEventListener('click', jump);
