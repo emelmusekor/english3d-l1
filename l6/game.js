@@ -155,11 +155,21 @@ function speak(text, who) {
 
 // ---------------- 3D 기본 ----------------
 const canvas = $('#c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// 그래픽 카드 대신 CPU 로 그리는 크롬(SwiftShader·Microsoft Basic Render 등)이면 아주 느려요 → 처음부터 아주 가볍게, 계단 펴기(antialias) 끄기
+const SOFT_GPU = (() => { try { const c = document.createElement('canvas'), g = c.getContext('webgl2') || c.getContext('webgl'); if (!g) return ''; const d = g.getExtension('WEBGL_debug_renderer_info'); const r = String(d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER)); try { g.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} return /SwiftShader|Basic Render|llvmpipe|softpipe|Software/i.test(r) ? r : ''; } catch (e) { return ''; } })();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !SOFT_GPU, powerPreference: 'high-performance' });
 // 그래픽 품질: high(그림자·고해상도) / low(가볍게). G 키로 바꿀 수 있고, 느리면 자동으로 low.
-const GFX = { high: true, auto: true };
+const GFX = { high: true, auto: true, soft: !!SOFT_GPU };
+// 화면 해상도 배율: 단계별 기본값에, 큰 화면이면 그리는 점 수 상한(백만 점 단위)을 둬요
+function gfxPR() {
+  const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight);
+  const base = GFX.lite ? 0.7 : Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1);
+  const budget = (GFX.lite ? (GFX.soft ? 0.45 : 0.9) : GFX.high ? 3.6 : 2.0) * 1e6;
+  return Math.max(0.35, Math.min(base, Math.sqrt(budget / (w * h))));
+}
 try { const q = new URLSearchParams(location.search).get('gfx') || localStorage.getItem('english3d_gfx'); if (q) { GFX.high = q === 'high'; GFX.auto = false; GFX.wantLite = q === 'lite'; GFX.fixed = !!new URLSearchParams(location.search).get('gfx'); } } catch (e) {}
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1));
+if (GFX.soft && !GFX.fixed) { GFX.high = false; GFX.wantLite = true; }
+renderer.setPixelRatio(gfxPR());
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = GFX.high; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
@@ -167,7 +177,7 @@ scene.background = new THREE.Color(0xbfe6ff);
 scene.fog = new THREE.Fog(0xbfe6ff, 55, 160);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 420);
 camera.rotation.order = 'YXZ';
-function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { const w = innerWidth, h = innerHeight; renderer.setPixelRatio(gfxPR()); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const hemi = new THREE.HemisphereLight(0xe3f2ff, 0xc9bfa4, 1.35); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d8, 2.0); sun.position.set(30, 50, 20);
@@ -272,7 +282,7 @@ function polish(root) {
 // 아주 가볍게: 화면 해상도를 낮추고(픽셀 0.7배), 먼 곳은 안개로 가려 덜 그려요 (느린 크롬북용)
 function setLite(on, why) {
   GFX.lite = on;
-  renderer.setPixelRatio(on ? 0.7 : Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1)); resize();
+  resize();
   scene.fog.near = on ? 26 : 55; scene.fog.far = on ? 80 : 160; camera.far = on ? 90 : 420; camera.updateProjectionMatrix();
   sky.scale.setScalar(on ? 0.22 : 1); sunDisk.scale.set(on ? 16 : 60, on ? 16 : 60, 1); clouds.visible = !on; // 하늘 공도 보이는 거리 안으로
   if (why) try { toast(on ? '🎨 그래픽: 아주 가볍게 (G 키로 바꾸기)' : '🎨 그래픽: 선명하게 (G 키로 바꾸기)'); } catch (e) {}
@@ -280,7 +290,7 @@ function setLite(on, why) {
 function setQuality(high, why) {
   GFX.high = high; if (high && GFX.lite) setLite(false);
   renderer.shadowMap.enabled = high; sun.castShadow = high;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 1.5 : 1)); resize();
+  resize();
   scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
   if (why) try { toast(high ? '🎨 그래픽: 선명하게 (G 키로 바꾸기)' : '🎨 그래픽: 가볍게 (G 키로 바꾸기)'); } catch (e) {}
 }
@@ -314,6 +324,7 @@ function gfxTick(dt, now) {
     }
   }
   if (GFX.wantLite && !GFX.lite && started) { GFX.wantLite = false; setLite(true); }
+  if (GFX.soft && started && !GFX.softTold) { GFX.softTold = true; setTimeout(() => { try { toast('💻 이 컴퓨터의 크롬이 그래픽 카드를 쓰지 않고 있어 화면을 가볍게 그려요. 크롬 창을 모두 닫았다 다시 열면 빨라질 수 있어요.'); } catch (e) {} }, 2500); }
   animatePeople(now / 1000, dt);
   fx2Tick(dt, now / 1000);
 }
@@ -416,7 +427,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.0'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.1'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
