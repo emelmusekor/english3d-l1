@@ -1625,6 +1625,14 @@ function drawMapWorld(tx, tz, s) {
   R(-33.5, -13.2, -20.5, -10, '#1971c2', '후룸라이드'); R(-34, -29.6, -25, -24.6, '#2f7d4f', '스테이지'); R(-46, -46, -20, -32.6, '#b9d4e8', '매직아일랜드', '#1c3fa8');
   mctx.fillStyle = '#5f3dc4'; mctx.fillText('플라이벤처', tx(40), tz(-22) + 4);
 }
+// 놀이 층(play.js)이 롯데월드 놀이기구에 태워 줄 때 쓰는 자리·모형 (이 단원 전용)
+window.__lw = {
+  CARO, MI, FLUME, LWFX, RINKV, FOOD, SPOTS, STAGE, SHIP, FLY, LW, FAC,
+  zone: () => (P.z < -9.4 ? 'park' : P.z < 4.6 ? 'bus' : 'school'),          // 지금 내가 있는 구역
+  mission: () => ({ stage: S.stage, ticket: !!(stageState && stageState.ticket), over: !!(stageState && stageState.over) }),
+  englishQuiz: () => Object.values(L.eng || {}).map(e => ({ q: e.ask ? e.sit : `${e.q}  (${e.qKo})`, a: e.a, why: `📗 ${e.book} 표현 · ${e.ask ? e.a[0] : e.aKo}`, en: true, book: e.book })),
+  safetyQuiz: () => [].concat(...['pre', 'walk', 'bus', 'arrive', 'ride', 'lunch', 'lost', 'emerg', 'back'].map(k => Object.values(L[k] || {}).filter(q => q && q.q && Array.isArray(q.a))))
+};
 
 // ---------------- 플레이어 ----------------
 const P = { x: 0, z: 40, yaw: 0, pitch: 0, r: 0.4, jy: 0, vy: 0 };
@@ -2002,8 +2010,9 @@ speak = function (text, who) { return /[가-힣]/.test(String(text || '')) ? spe
 const _setLine = setLine;
 setLine = function (who, en, ko, o = {}) {
   _setLine(who, en, ko, Object.assign({}, o, { speak: false, koAlways: true }));
-  const t = en || ko; lastSpeech = t ? [t, who] : null; ui.spk.style.display = t ? 'inline-block' : 'none';
-  if (t) speakKo(t);
+  const t = en || ko, eng = !!en && !/[가-힣]/.test(en); lastSpeech = t ? [t, who] : null; ui.spk.style.display = t ? 'inline-block' : 'none';
+  if (eng) { if (o.speak !== false) _speakEn(en, who); } // 영어 문장은 늘 영어 목소리로 (듣기 연습)
+  else if (t) speakKo(t);
 };
 
 function resetWorld() {
@@ -2033,6 +2042,18 @@ const tell = (who, text, btn) => say(who, text, '', btn ? { btn } : {});
 function quiz(q, who) {
   return ask(who || '', q.q, q.sub || '어떻게 할까요? 가장 안전한 행동을 골라요.', q.a,
     { after: '💡 ' + q.why, wait: Math.min(4600, 1900 + q.why.length * 45), hint: q.hint || '다시 생각해 봐요. 가장 안전한 행동은 무엇일까요?', sayIt: false });
+}
+// 영어로 말해 봐요: 교과서 표현으로 대답 고르기 / 알맞은 질문 고르기 (맞힌 문장은 영어로 읽어 줘요)
+async function english(e) {
+  if (!e) return;
+  const tag = `📗 ${e.book} 표현`;
+  if (e.ask) {
+    await ask('나', e.sit, `${tag} · 알맞은 영어 문장을 골라요.`, e.a, { me: true, wait: 1500 });
+    if (e.reply) await say(e.replyWho || e.who, e.reply[0], e.reply[1]);
+  } else {
+    await ask(e.who, e.q, `${e.qKo}${e.cue ? '  ·  ' + e.cue : ''}  ·  ${tag}`, e.a, { me: true, speakQ: true, wait: 1500, after: e.aKo ? '💬 ' + e.aKo : '' });
+    if (e.after) await say(...e.after);
+  }
 }
 // 정답이 없는 선택 — 고른 값을 돌려줘요
 function choose(who, en, ko, choices) {
@@ -2130,6 +2151,8 @@ function stage1() {
     await say('선생님', `🛡️ 안전 점수는 ${RULE.start}점에서 시작해요.`, `뛰면 점수가 깎이고, ${RULE.min}점 밑으로 내려가면 처음부터 다시 해요. 차도에 들어가거나 차에 부딪혀도 처음부터예요!`, { btn: '조심할게요' });
     const list = []; for (let n = 1; n <= (L.classes || 6); n++) list.push([n, n + '반']);
     S.cls = await choose('선생님', '나는 6학년 몇 반인가요?', '우리 반 버스는 반 번호와 같아요. (1반 → 1호차)', list); save();
+    await say('선생님', '', '🇬🇧 오늘은 영어 시간이에요! 현장체험학습 길에서 6학년 영어 표현으로 말해 봐요.', { btn: '좋아요' });
+    await english(L.eng.when);
     for (const q of L.pre) await quiz(q, '선생님');
     await tell('선생님', `좋아요! ${S.cls}반은 ${S.cls}호차를 타요. 버스는 ${L.busPlace}에 있어요. 정문을 나가면 왼쪽으로 돌아요. 길은 건너지 않고, 학교 쪽 보도로 한 줄로 걸어요.`, '출발!');
     closeDlg(); s1walk();
@@ -2143,7 +2166,7 @@ function s1walk() {
     closeDlg(); placeNPC('teacher', 28.7, 21, 0);
     setObj('🚶 보도를 따라 <b>큰길 모퉁이</b> 쪽으로 걸어요', () => [29.9, 27.5]);
     spot(29.9, 27.5, () => run(async () => {
-      await quiz(L.walk.phone); closeDlg();
+      await english(L.eng.plan); await quiz(L.walk.phone); closeDlg();
       setObj('🚶 <b>큰길(석정로) 모퉁이</b>까지 걸어요', () => [29.9, 17.3]);
       spot(29.9, 17.3, () => run(async () => { await quiz(L.walk.corner, '선생님'); closeDlg(); s1drive(); }), { label: '모퉁이' });
     }));
@@ -2210,7 +2233,7 @@ async function s2ride() {
   BUSIN.moving = true; beep('get');
   await tell('기사님', '모두 안전벨트를 맸지요? 출발합니다!', '출발');
   await tell('', `🛣️ 버스가 고속도로를 달려요. ${L.park}까지 1시간 20분쯤 걸려요.`, '다음');
-  await quiz(L.bus.eraser); await quiz(L.bus.window); await quiz(L.bus.sick);
+  await quiz(L.bus.eraser); await quiz(L.bus.window); await quiz(L.bus.sick); await english(L.eng.sick);
   await tell('', `🏙️ 서울 잠실에 들어왔어요. 저기 ${L.park}가 보여요!`, '다음');
   await quiz(L.bus.stop);
   BUSIN.moving = false;
@@ -2225,6 +2248,8 @@ function stage3() {
   setObj('🅿 주차장에 도착했어요! 마중 나온 <b>담당자</b>에게 가요', npcAt('guide')); mark('guide');
   NPC.guide.talk = async () => {
     mark('guide', false); NPC.guide.talk = null;
+    await say('담당자', 'Welcome to Lotte World!', '롯데월드에 온 걸 환영해요!');
+    await english(L.eng.grade);
     await tell('담당자', '어서 오세요! 주차장에서는 버스가 움직여요. 보행로 표시를 따라 줄지어 오세요. 매표소까지 안내할게요.');
     await quiz(L.arrive.off, '선생님'); closeDlg();
     placeNPC('guide', -27.6, -8.2, W); placeNPC('teacher', -17.6, -6.1, W);
@@ -2257,12 +2282,12 @@ function s3meet() {
     await tell('선생님', '회전목마를 바라보고 왼쪽이 만남의 광장이에요. 인포메이션, 의무실, 미아보호소를 직접 찾아가서 어디 있는지 익혀 봐요.', '찾아볼게요');
     closeDlg(); stageState.seen = 0;
     const places = [
-      [FAC.info, '❓ 인포메이션', '❓ 인포메이션(손님상담실): 길을 모를 때, 물건이나 친구를 잃어버렸을 때 여기로 와요. 명찰을 단 캐스트에게는 무엇이든 물어봐도 돼요.', null, 'info'],
+      [FAC.info, '❓ 인포메이션', '❓ 인포메이션(손님상담실): 길을 모를 때, 물건이나 친구를 잃어버렸을 때 여기로 와요. 명찰을 단 캐스트에게는 무엇이든 물어봐도 돼요.', L.eng.where, 'info'],
       [FAC.aid, '➕ 의무실', '➕ 의무실: 다치거나 아프면 여기로 와요. 걷기 힘들면 가까운 캐스트에게 말하면 데려다줘요. 바로 옆에 AED도 있어요.', L.arrive.aid, 'aid'],
       [FAC.lost, '🧒 미아보호소', '🧒 미아보호소: 모둠과 떨어져 길을 잃으면 캐스트가 여기로 데려다주고 선생님을 찾아 줘요.', null, 'lost']
     ];
     places.forEach(([p, name, text, q, tag]) => spot(p[0], p[1] + 2.3, () => run(async () => {
-      await tell('', text, '알겠어요'); if (q) await quiz(q); closeDlg(); good(); stageState.seen++;
+      await tell('', text, '알겠어요'); if (q) await (q.book ? english(q) : quiz(q)); if (tag === 'aid') await english(L.eng.aid); closeDlg(); good(); stageState.seen++;
       if (stageState.seen < 3) { setObj(`🔎 만남의 광장에서 세 곳을 찾아요 (${stageState.seen}/3)`, nearestItem); return; }
       setObj('📍 <b>회전목마 앞</b>의 선생님께 돌아가요', npcAt('teacher')); mark('teacher');
       NPC.teacher.talk = async () => {
@@ -2284,6 +2309,7 @@ function stage4() {
     mark('cast_fly', false); NPC.cast_fly.talk = null;
     await tell('캐스트', '플라이벤처에 오신 걸 환영해요! 타기 전에 키 재는 판을 먼저 봐 주세요. 키 140cm부터 혼자 탈 수 있어요.');
     await quiz(L.ride.height);
+    await english(L.eng.taller);
     await tell('민준', '고마워! 후룸라이드는 110cm부터래. 그건 우리 다 같이 탈 수 있어.', '좋아, 가자!');
     closeDlg();
     setObj('🚣 남서쪽 <b>후룸라이드</b>의 캐스트에게 가요', npcAt('cast_flume')); mark('cast_flume');
@@ -2315,6 +2341,7 @@ function s4island() {
       await quiz(L.ride.stopped);
       stageState.gyroStop = false; beep('get');
       await tell('캐스트', '안전 센서가 잠깐 멈춘 거였어요. 침착하게 기다려 줘서 고마워요!', '휴~');
+      await english(L.eng.think);
       await quiz(L.ride.scared);
       nextStage();
     };
@@ -2336,7 +2363,7 @@ function stage5() {
       setObj('🍔 <b>버거베어</b>의 점원에게 가서 주문해요', npcAt('clerk')); mark('clerk');
       NPC.clerk.talk = async () => {
         mark('clerk', false); NPC.clerk.talk = null;
-        await quiz(L.lunch.coupon, '점원'); await quiz(L.lunch.tray); await quiz(L.lunch.allergy);
+        await quiz(L.lunch.coupon, '점원'); await english(L.eng.order); await quiz(L.lunch.tray); await english(L.eng.taste); await quiz(L.lunch.allergy);
         await tell('', '😋 모둠 친구들과 맛있게 먹었어요!', '잘 먹었습니다');
         await s5lost();
       };
@@ -2350,6 +2377,7 @@ async function s5lost() {
   setObj('🧑‍💼 명찰을 단 <b>캐스트</b>를 찾아가 도움을 청해요', npcAt('cast_plaza')); mark('cast_plaza');
   NPC.cast_plaza.talk = async () => {
     mark('cast_plaza', false); NPC.cast_plaza.talk = null;
+    await english(L.eng.lost);
     await tell('캐스트', '모둠을 잃어버렸군요. 걱정 마세요. 미아보호소와 선생님께 바로 연락할게요. 그동안 저와 함께 있어요.');
     const c = NPC.cast_plaza.g.position; placeNPC('stranger', c.x + 2.4, c.z + 1.6); NPC.stranger.g.visible = true;
     await quiz(L.lost.stranger, '모르는 어른');
@@ -2366,7 +2394,7 @@ async function s5lost() {
         await quiz(L.emerg.crowd); await quiz(L.emerg.hurt);
         beep('bad'); flash('#ffa8a8');
         await tell('', '🚨 삐— 삐— 비상벨이 울려요! "손님 여러분, 캐스트의 안내에 따라 대피해 주세요."', '!');
-        await quiz(L.emerg.fire); closeDlg(); s5exit();
+        await quiz(L.emerg.fire); await english(L.eng.stairs); closeDlg(); s5exit();
       }), { label: '공연' });
     }), { label: '집합 장소' });
   };
@@ -2414,6 +2442,7 @@ function stage6() {
             setObj('🏫 운동장의 <b>선생님</b>께 가요', npcAt('teacher')); mark('teacher');
             NPC.teacher.talk = async () => {
               mark('teacher', false);
+              await english(L.eng.fun);
               await tell('선생님', '모두 안전하게 돌아왔어요! 마지막으로, 현장체험학습 날 내가 꼭 지킬 안전 약속을 써 봐요.', '약속 쓰기 ✏️');
               closeDlg(); openWriter();
             };

@@ -114,6 +114,26 @@ window.LESSON = {
     home: { q: '4시 30분, 성산효대학원 앞에 버스가 도착했어요.', a: ['완전히 멈춘 뒤 좌석 밑과 선반을 확인하고, 차례대로 내려 보도로 올라간다.', '버스가 멈추자마자 벨트를 풀고 통로로 나간다.', '내려서 버스 뒤로 돌아 길을 건넌다.'], why: '마지막까지 서다·보다·걷다. 두고 내린 물건이 없는지도 봐요.' }
   },
 
+
+  // ───────────────────────── 영어로 말해 봐요 (영어 시간에 하는 체험이라, 6학년 교과서 표현을 현장체험학습 상황에 맞게 써요)
+  //  대답 고르기: { who, q, qKo, a:[정답, 오답, 오답], aKo, book }
+  //  질문 고르기(내가 묻기): { ask: true, who, sit, a:[정답 질문, 오답, 오답], reply:[영어, 한국어], book }
+  eng: {
+    when:   { book: 'Lesson 4', who: '선생님', q: 'When is the field trip?', qKo: '현장체험학습은 언제예요?', cue: '📅 12월 1일', a: ["It's on December 1st.", "It's on May 22nd.", "I'm in the sixth grade."], aKo: '12월 1일이에요.' },
+    plan:   { book: 'Lesson 9', who: '지호', q: 'What are you going to do tomorrow?', qKo: '내일 뭐 할 거야?', cue: '🎠 회전목마 타기', a: ["I'm going to ride the merry-go-round.", "I'm going to walk the dog.", "I'd like to have a beef steak, please."], aKo: '회전목마를 탈 거야.' },
+    sick:   { book: 'Lesson 3', who: '선생님', q: "What's wrong?", qKo: '어디가 아프니?', cue: '🤕 머리가 아파요', a: ['I have a headache.', 'I have a toothache.', "It's on May 22nd."], aKo: '머리가 아파요.', after: ['선생님', 'Get some rest.', '좀 쉬렴. (창밖 먼 곳을 보며 쉬어요)'] },
+    grade:  { book: 'Lesson 1', who: '담당자', q: 'What grade are you in?', qKo: '몇 학년이에요?', cue: '6학년', a: ["I'm in the sixth grade.", "I'm in the book club.", "It's on December 1st."], aKo: '6학년이에요.' },
+    where:  { ask: true, book: 'Lesson 11', who: '안내 캐스트', sit: '🗺️ 회전목마 가는 길을 영어로 물어봐요.', a: ['How can I get to the merry-go-round?', 'What grade are you in?', 'What would you like to have?'], reply: ["It's in front of the clock tower.", '시계탑 앞에 있어요.'] },
+    aid:    { book: 'Lesson 11', who: '간호사', q: 'Where is the first aid room?', qKo: '의무실은 어디에 있어요?', cue: '❓ 인포메이션과 🧒 미아보호소 사이', a: ["It's between the information center and the lost children center.", "It's behind the museum.", "It's in front of the bank."], aKo: '인포메이션과 미아보호소 사이에 있어요.' },
+    taller: { book: 'Lesson 10', who: '민준', q: 'Which is taller?', qKo: '어느 것이 더 높아?', cue: '🗼 자이로드롭 vs 🎠 회전목마', a: ['The Gyro Drop is taller than the merry-go-round.', 'The merry-go-round is taller than the Gyro Drop.', "I'm taller than you."], aKo: '자이로드롭이 회전목마보다 더 높아.' },
+    think:  { book: 'Lesson 12', who: '서연', q: 'The Gyro Drop looks fun. What do you think?', qKo: '자이로드롭 재미있어 보여. 너는 어떻게 생각해?', cue: '🙂 나도 그렇게 생각해요', a: ['I think so, too.', "It's on May 22nd.", 'Get some rest.'], aKo: '나도 그렇게 생각해.' },
+    order:  { book: 'Lesson 2', who: '점원', q: 'What would you like to have?', qKo: '무엇을 드릴까요?', cue: '🥪 치킨 샌드위치', a: ["I'd like to have a chicken sandwich, please.", "I'd like to have a beef steak, please.", 'I have a stomachache.'], aKo: '치킨 샌드위치 주세요.' },
+    taste:  { book: 'Lesson 2', who: '서연', q: "How's your sandwich?", qKo: '샌드위치 어때?', cue: '😍 맛있어요', a: ["It's delicious.", "It's sour.", 'I think so, too.'], aKo: '맛있어.' },
+    lost:   { book: 'Lesson 8', who: '캐스트', q: 'Why are you sad?', qKo: '왜 슬퍼요?', cue: '😢 친구들을 잃어버렸어요', a: ['Because I lost my friends.', 'Because I won the soccer game.', 'I have a runny nose.'], aKo: '친구들을 잃어버렸기 때문이에요.', after: ['캐스트', "Don't worry. I can help you.", '걱정 마세요. 제가 도와줄게요.'] },
+    stairs: { ask: true, book: 'Lesson 5', who: '나', sit: '🔥 엘리베이터 대신 계단으로 가자고 친구에게 영어로 제안해요.', a: ['How about using the stairs?', 'How about turning off the water?', 'What club are you in?'], reply: ["That's a good idea.", '좋은 생각이야.'], replyWho: '서연' },
+    fun:    { book: 'Lesson 12', who: '선생님', q: 'What do you think about the field trip?', qKo: '현장체험학습은 어땠어요?', cue: '🤩 재미있었어요', a: ["I think it's fun.", "I think it's expensive.", 'I have a fever.'], aKo: '재미있다고 생각해요.' }
+  },
+
   // 마지막: 나의 안전 약속 (세 가지를 골라 약속 카드를 만들어요)
   pledges: [
     '버스에서는 출발 전에 안전벨트를 매고, 완전히 멈출 때까지 풀지 않겠습니다.',
