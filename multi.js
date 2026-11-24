@@ -13,6 +13,7 @@
   var cfg = window.NET_CONFIG || {};
   var isDev = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
   var devMp = isDev && qs.has('mp');
+  var devStrat = isDev ? parseInt(qs.get('mpstrat'), 10) : NaN; // 개발용: 처음 길을 일부러 다르게
   if (cfg.multiplayer === false && !devMp) return;
   if (qs.has('autotest') && !devMp) return;
   if (!window.RTCPeerConnection || !window.crypto || !crypto.subtle || !window.THREE) return;
@@ -136,7 +137,7 @@
 
   // ------------------------------------------------------------ 연결
   var T = null, room = null, act = {}, ust = null;
-  var stratI = 0, connecting = false, status = 'off', watchTo = null, retryTo = null, gen = 0;
+  var stratI = 0, joinedAt = 0, connecting = false, status = 'off', watchTo = null, retryTo = null, gen = 0;
   var peers = {};         // userId → peer
   var lastSent = '', lastSentT = 0, lastStateSig = '', leaving = false;
 
@@ -147,15 +148,17 @@
 
   function connect() {
     if (room || connecting || !me) return;
+    joinedAt = Date.now(); heal.lastJoin = joinedAt;
     connecting = true; setStatus('wait');
     // 같은 반 친구들이 시작 자리에서 한데 겹쳐 서지 않게 번호에 따라 줄을 맞춰 서요 (7명씩 7줄, 가운데 길을 따라)
     try { var P0 = G.P, i0 = (me.num - 1) % 49; if (Math.abs(P0.x) < 0.01 && Math.abs(P0.z - 40) < 0.01) { P0.x = (i0 % 7 - 3) * 1.1; P0.z = 40 - Math.floor(i0 / 7) * 1.2; } } catch (e) {}
+    if (isFinite(devStrat) && devStrat >= 0 && devStrat < STRATS.length && !connect.used) { connect.used = 1; stratI = devStrat; }
     var my = ++gen, name = STRATS[stratI];
     withTimeout(import('https://cdn.jsdelivr.net/npm/' + name + '@' + VER + '/+esm'), 15000).then(function (mod) {
       if (my !== gen) return;
       connecting = false;
       T = mod;
-      var opt = { appId: APP, identity: 'none', maxUsers: MAX, relayConfig: { warnOnRelayFailure: false } };
+      var opt = { appId: APP, identity: 'none', maxUsers: MAX, relayConfig: { warnOnRelayFailure: false, redundancy: name === 'trystero' ? 8 : undefined } };
       // 큰 방: 이웃 몇 명하고만 직접 연결하고 나머지는 건너서 전해요(30명이 서로 다 직접 연결하면 기기가 버티지 못해요)
       try { if (typeof mod.scale === 'function') opt.use = [mod.scale({ maxDirectPeers: DIRECT })]; } catch (e) {}
       var r = mod.joinRoom(opt, roomId());
@@ -163,6 +166,7 @@
       wire(r, my);
       clearTimeout(watchTo);
       watchTo = setTimeout(function () { checkRelays(my); }, 12000);
+      setTimeout(function () { if (my === gen) beat(true); }, 20000);
     }).catch(function () { if (my === gen) { connecting = false; nextStrategy(); } });
   }
   function leave() {
@@ -196,6 +200,7 @@
       r.onError(function (err) {
         if (my !== gen) return;
         var code = err && err.code;
+        if (code === 'peer-connect-failed') heal.fail++;
         if (code === 'relay-failed' && !peerList().length) nextStrategy();
         else if (code === 'room-full' && !peerList().length) { setStatus('full'); toast('👥 지금은 우리 반 방이 꽉 찼어요(' + MAX + '명). 혼자 하기로 계속해요.', 3500); }
       });
@@ -844,6 +849,8 @@
     if (status === 'wait' && !n) chipText.textContent = '📡 우리 반 · 연결하는 중…';
     else if (status === 'solo') chipText.textContent = '🙂 혼자 하는 중 (연결 안 됨)';
     else if (status === 'full') chipText.textContent = '👥 우리 반 방이 꽉 찼어요';
+    else if (!n && heal.blocked) chipText.textContent = '📡 친구와 연결이 안 돼요 · 눌러서 다시 연결';
+    else if (!n && heal.others.length) chipText.textContent = '📡 친구 ' + heal.others.length + '명 접속 중 · 연결하는 중…';
     else if (!n) chipText.textContent = '🟢 우리 반 · 친구 0명 · 기다려요';
     else {
       var step = 15 * (n + 1), sum = groupSum();
@@ -896,6 +903,10 @@
         });
         if (liveList().length) { var pb = el('button', '', '📸 같이 사진'); pb.type = 'button'; pb.onclick = function () { closePanel(true); takePhoto(); }; em.appendChild(pb); }
         body.appendChild(em);
+        var rc = el('button', '', '🔄 다시 연결'); rc.type = 'button'; rc.title = '친구가 안 보이면 눌러요'; rc.onclick = function () { closePanel(true); reconnectNow(); };
+        var rw = el('div', 'mpEmo'); rw.appendChild(rc);
+        if (!liveList().length && heal.others.length) rw.appendChild(el('span', 'mpSub', '지금 접속한 친구: ' + heal.others.map(function (o) { return o.num + '번 ' + o.nick; }).slice(0, 8).join(', ')));
+        body.appendChild(rw);
       }
     });
   }
@@ -934,8 +945,64 @@
     watchPeers();
     questCheck();
     refreshChip();
+    beat(false);
   }, 1000);
   addEventListener('pagehide', function () { leave(); status = 'off'; });
+
+
+  // ------------------------------------------------------------ 혼자 떨어지지 않게 (서버에 연결 상태 알리기 + 다시 붙기)
+  var heal = { fail: 0, lastJoin: 0, lastBeat: 0, aloneSince: 0, tries: 0, nextTry: 0, others: [], blocked: false, busy: false };
+  var HEAL_BEAT = 30000;
+  function endpoint() { try { return String((window.NET_CONFIG && window.NET_CONFIG.endpoint) || ''); } catch (e) { return ''; } }
+  function beat(force) {
+    var ep = endpoint(), now = Date.now();
+    if (!ep || !me || heal.busy || (!force && now - heal.lastBeat < HEAL_BEAT)) return;
+    if (devMp && !qs.has('mpserver')) return; // 개발용 접속(가짜 반 코드)은 서버에 알리지 않아요
+    heal.lastBeat = now; heal.busy = true;
+    var body = { action: 'presence', code: me.code, num: me.num, nick: me.nick, lesson: lessonId, strat: stratI, peers: liveList().length, fail: heal.fail, status: status };
+    fetch(ep, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) { heal.busy = false; if (res && res.ok && Array.isArray(res.others)) { heal.others = res.others.filter(function (o) { return o && o.age <= 90; }); healCheck(); } })
+      .catch(function () { heal.busy = false; });
+  }
+  function healCheck() {
+    if (!me || !G.started || connecting) return;
+    var now = Date.now(), live = liveList().length, others = heal.others;
+    if (live > 0 || !others.length) { heal.aloneSince = 0; if (live > 0) { heal.tries = 0; heal.blocked = false; } return; }
+    // 친구가 접속해 있는데 나는 0명
+    if (!heal.aloneSince) heal.aloneSince = now;
+    if (now - heal.lastJoin < 35000 || now - heal.aloneSince < 25000 || now < heal.nextTry) return;
+    // 친구들이 가장 많이 쓰는 길
+    // (나도 세고, 수가 같으면 앞쪽 길로 — 둘이 동시에 서로의 길로 엇갈려 옮기지 않게)
+    var cnt = {}, best = stratI, bn = 0;
+    cnt[stratI] = 1;
+    others.forEach(function (o) { var s = int(o.strat, 0, STRATS.length - 1); cnt[s] = (cnt[s] || 0) + 1; });
+    Object.keys(cnt).forEach(function (k) { var s = +k; if (cnt[s] > bn || (cnt[s] === bn && s < best)) { bn = cnt[s]; best = s; } });
+    // 친구들도 서로 0명이면(모두 막힌 경우) 나만 옮겨 봐야 소용없어요 → 같은 길에서 다시
+    var friendsConnected = others.some(function (o) { return o.peers > 0; });
+    if (best !== stratI) {
+      heal.tries++; heal.nextTry = now + 40000;
+      toast('📡 친구들이 있는 곳으로 다시 연결해요…', 2600);
+      leave(); stratI = best; status = 'off'; connect();
+      return;
+    }
+    // 다른 길에 있는 친구가 이쪽으로 옮겨 올 차례예요 → 나는 기다려요
+    if (others.some(function (o) { return int(o.strat, 0, STRATS.length - 1) !== stratI; })) { heal.nextTry = now + 30000; return; }
+    if (heal.tries >= 4) { // 여러 번 다시 들어가도 안 되면: 학교 인터넷이 친구와 바로 연결을 막고 있을 수 있어요
+      if (!heal.blocked) { heal.blocked = true; refreshChip(); toast('📡 친구 ' + others.length + '명이 접속해 있는데 연결이 안 돼요. 학교 인터넷이 막고 있을 수 있어요. 게임은 그대로 할 수 있어요.', 5200); }
+      heal.nextTry = now + 180000; heal.tries = 2; // 3분 뒤에 다시 시도
+      return;
+    }
+    heal.tries++; heal.nextTry = now + 30000 * heal.tries;
+    if (heal.tries > 1) toast('📡 친구들과 다시 연결하는 중…', 2200);
+    var s = stratI; leave(); stratI = s; status = 'off'; connect();
+  }
+  function reconnectNow() {
+    heal.tries = 0; heal.nextTry = 0; heal.blocked = false; heal.fail = 0;
+    toast('📡 다시 연결해요…', 2000);
+    var s = stratI; leave(); stratI = s; status = 'off'; connect();
+    setTimeout(function () { beat(true); }, 20000);
+  }
 
   // ------------------------------------------------------------ 게임 쪽에서 부르는 것
   var nearFriend = null;
@@ -1053,10 +1120,10 @@
     map: drawMap,
     emote: emote,
     debug: function () {
-      return { myPet: myPet(), status: status, strat: STRATS[stratI], buddy: buddy, stickers: stickerCount(), invite: invite && invite.kind, rps: !!rps, rpsIn: !!rpsIn, room: me ? roomId() : '', sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
+      return { heal: { others: heal.others.length, tries: heal.tries, fail: heal.fail, blocked: heal.blocked, alone: heal.aloneSince ? Math.round((Date.now() - heal.aloneSince) / 1000) : 0 }, myPet: myPet(), status: status, strat: STRATS[stratI], buddy: buddy, stickers: stickerCount(), invite: invite && invite.kind, rps: !!rps, rpsIn: !!rpsIn, room: me ? roomId() : '', sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
         peers: peerList().map(function (p) { return { pet: p.st && p.st.pt, petShown: !!p.pet, id: p.id, k: p.st && p.st.k, n: p.st && p.st.n, av: p.st && p.st.av, d: r2(p.d), st: p.st && p.st.st, s: p.st && p.st.s, h: p.st && p.st.h, x: r2(p.tx), z: r2(p.tz), has: p.has, away: p.away, vis: !!(p.g && p.g.visible) }; }) };
     },
-    _test: isDev ? { menu: function () { var p = liveList()[0]; if (p) openFriendMenu(p); }, rps: function () { var p = liveList()[0]; if (p) openRps(p); }, sticker: function () { var p = liveList()[0]; if (p) openSticker(p); }, photo: takePhoto, buddyAsk: function () { var p = liveList()[0]; if (p) askBuddy(p); }, incoming: openIncoming, openAsk: function () { var p = liveList()[0]; if (p) openAsk(p); }, openAnswer: openAnswer, pick: function (i) { if (panelKeys && panelKeys[i]) panelKeys[i].click(); }, group: openGroupPanel, leave: function () { leave(); status = 'off'; }, askN: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) openAsk(p); }, follow: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) startFollow(p); }, questType: function (ty) { qEpoch = function () { return ty; }; questRoll(); quest.done = false; quest.p = 0; } } : null
+    _test: isDev ? { beat: function () { heal.lastBeat = 0; beat(true); }, heal: healCheck, reconnect: reconnectNow, setOthers: function (o) { heal.others = o; }, menu: function () { var p = liveList()[0]; if (p) openFriendMenu(p); }, rps: function () { var p = liveList()[0]; if (p) openRps(p); }, sticker: function () { var p = liveList()[0]; if (p) openSticker(p); }, photo: takePhoto, buddyAsk: function () { var p = liveList()[0]; if (p) askBuddy(p); }, incoming: openIncoming, openAsk: function () { var p = liveList()[0]; if (p) openAsk(p); }, openAnswer: openAnswer, pick: function (i) { if (panelKeys && panelKeys[i]) panelKeys[i].click(); }, group: openGroupPanel, leave: function () { leave(); status = 'off'; }, askN: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) openAsk(p); }, follow: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) startFollow(p); }, questType: function (ty) { qEpoch = function () { return ty; }; questRoll(); quest.done = false; quest.p = 0; } } : null
   };
 
   // 개발용 기록: ?mplog=1 (로컬에서만)

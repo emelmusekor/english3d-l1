@@ -167,7 +167,7 @@
 
     <div class="sec">
       <h2>👩‍🎓 학생별 기록</h2>
-      <p class="d-sub">표 머리를 누르면 정렬돼요. 이름을 누르면 글쓰기 카드가 보여요. 정답률은 <b>처음에 바로 맞힌 비율</b>이에요.</p>
+      <p class="d-sub">표 머리를 누르면 정렬돼요. 이름을 누르면 글쓰기 카드가 보여요. 정답률은 <b>처음에 바로 맞힌 비율</b>이에요.<br><b>함께 하기</b>: 🟢 친구 n명과 연결 · 🟠 친구가 접속해 있는데 혼자 떨어짐(게임이 자동으로 다시 연결해요. 오래가면 학생 화면 왼쪽 위 우리 반 칸 → 🔄 다시 연결) · ⚠ 학교 인터넷이 연결을 막는 것 같아요 · - 지금 접속 안 함</p>
       <div class="tblwrap"><table class="d-tbl" id="tbl"></table></div>
     </div>
 
@@ -417,7 +417,7 @@
 
   var COLS = [
     ['num', '번호'], ['nick', '이름'], ['stage', '진행 단계'], ['stars', '별'], ['acc', '정답률'],
-    ['best', '최고 연속'], ['lastSeen', '마지막 활동'], ['weak', '약한 문제', true], ['x', '', true]
+    ['best', '최고 연속'], ['lastSeen', '마지막 활동'], ['link', '함께 하기', true], ['weak', '약한 문제', true], ['x', '', true]
   ];
   function renderTable(list, now) {
     var rows = list.slice().sort(function (a, b) {
@@ -435,7 +435,15 @@
       $('tbl').innerHTML = head + '<tr><td colspan="' + COLS.length + '" class="d-empty">아직 참여한 학생이 없어요. 학생들에게 반 코드 <b>' + esc(data.cls.code) + '</b>를 알려 주세요.</td></tr>';
       return;
     }
-    var hasPin = {}; (data.accounts || []).forEach(function (a) { if (a.pin) hasPin[a.num] = 1; });
+    var pres = {}, D0 = data.lessons[lesson] || {}; (D0.presence || []).forEach(function (q) { pres[q.num] = q; });
+    var anyLinked = (D0.presence || []).some(function (q) { return q.peers > 0; });
+    var linkCell = function (num) {
+      var q = pres[num]; if (!q) return '<span class="d-sub">-</span>';
+      if (q.peers > 0) return '<span title="친구 ' + q.peers + '명과 연결">🟢 ' + q.peers + '명</span>';
+      var others = (D0.presence || []).length - 1;
+      if (others > 0) return '<span class="d-low" title="같은 단원에 친구가 접속해 있는데 이 학생만 연결되지 않았어요. 게임이 자동으로 다시 연결을 시도해요. 오래가면 학생 화면의 우리 반 칸 → 🔄 다시 연결">🟠 혼자' + (q.fail ? ' ⚠' : '') + '</span>';
+      return '<span class="d-sub">⚪ 혼자 접속</span>';
+    };
     $('tbl').innerHTML = head + rows.map(function (s) {
       var acc = s.acc == null ? '-' : '<span class="d-bar"><i style="width:' + s.acc + '%"></i></span><span class="' + (s.acc < 60 ? 'd-low' : '') + '">' + s.acc + '%</span> <span class="d-sub">(' + s.correct + '/' + s.tries + ')</span>';
       var on = now - s.lastSeen <= ACTIVE_MS;
@@ -448,6 +456,7 @@
         '<td>' + acc + '</td>' +
         '<td>' + s.best + '</td>' +
         '<td><span class="d-dot' + (on ? ' on' : '') + '"></span>' + esc(ago(s.lastSeen)) + '</td>' +
+        '<td>' + linkCell(s.num) + '</td>' +
         '<td class="wrap">' + (s.weak.length ? s.weak.map(function (q) { return '<span class="tag">' + esc(q) + '</span>'; }).join(' ') : '<span class="d-sub">-</span>') + '</td>' +
         '<td><button type="button" class="d-btn ghost small" data-kick="' + s.num + '" title="이 학생 기록 지우기">지우기</button>' +
         '' + '</td>' +
