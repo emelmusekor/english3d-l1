@@ -21,6 +21,12 @@
   .d-btn.ghost{background:#eef2f6;color:var(--ink)}
   .d-btn.small{padding:6px 12px;font-size:15px;margin:0 4px 0 0}
   .d-btn.danger{background:#fff0f0;color:#c92a2a;border:2px solid #f5c2c2}
+  .d-mine{display:flex;flex-direction:column;gap:6px;margin:6px 0 2px}
+  .d-mine .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;background:#f4f7fa;border-radius:10px;padding:8px 10px}
+  .d-mine .row button{white-space:nowrap}
+  .d-mine .row b{font-family:monospace;font-size:18px;letter-spacing:2px}
+  .d-mine .row span{flex:1 1 140px;color:var(--muted);font-size:14px}
+  .d-del-sec{border:2px dashed #f5c2c2}
   .d-btn:disabled{opacity:.55;cursor:wait}
   .d-msg{min-height:1.3em;margin-top:8px;color:#c92a2a;font-size:15.5px;font-family:'Gowun Dodum','Malgun Gothic',sans-serif}
   .d-msg.good{color:var(--teal)}
@@ -102,6 +108,23 @@
         <button class="d-btn" id="nGo" type="submit">반 만들기</button>
         <div class="d-msg" id="nMsg"></div>
         <p class="d-sub">PIN은 선생님만 알고 있어요. 잊으면 다시 찾을 수 없으니 꼭 적어 두세요.</p>
+      </form>
+    </div>
+    <div class="sec d-del-sec">
+      <h2>🗑 반 코드 지우기</h2>
+      <div id="mineBox" class="d-hide">
+        <p class="d-sub">이 기기에서 만든 반이에요. <b>지우기</b>를 누르면 아래 칸에 반 코드가 들어가요.</p>
+        <div class="d-mine" id="mine"></div>
+      </div>
+      <form class="d-form" id="fDel" autocomplete="off">
+        <label for="dCode">지울 반 코드 (5글자)</label>
+        <input type="text" id="dCode" class="d-code-in" maxlength="5" placeholder="ABCDE" spellcheck="false">
+        <label for="dPin">그 반의 PIN</label>
+        <input type="password" id="dPin" maxlength="8" inputmode="numeric" placeholder="••••••">
+        <button class="d-btn danger" id="dGo" type="submit">반 지우기 (모든 기록 삭제)</button>
+        <div class="d-msg" id="dMsg"></div>
+        <p class="d-sub">반을 지우면 학생 기록과 이어하기 저장이 모두 사라지고, 그 반 코드로는 더 참여할 수 없어요. 되돌릴 수 없어요.</p>
+        <p class="d-sub">PIN을 잊었다면: 서버 구글 시트를 열고 위쪽 메뉴 <b>🎮 영어 3D 게임 → 반 지우기</b>로 지울 수 있어요(시트 주인만).</p>
       </form>
     </div>
   </div>
@@ -194,6 +217,39 @@
       .catch(function () { return { ok: false, error: 'network', msg: '서버에 연결하지 못했어요. 인터넷과 설정 주소를 확인해 주세요.' }; });
   }
   function msg(id, text, good) { var m = $(id); m.textContent = text || ''; m.className = 'd-msg' + (good ? ' good' : ''); }
+  // ---------------------------------------------------------- 이 기기에서 만든 반 (반 코드와 이름만 기억해요. PIN 은 저장하지 않아요)
+  var MINE = 'english3d_myclasses';
+  function mineGet() { try { var a = JSON.parse(localStorage.getItem(MINE)); return Array.isArray(a) ? a.filter(function (x) { return x && /^[A-Z0-9]{5}$/.test(x.code); }) : []; } catch (e) { return []; } }
+  function mineSet(a) { try { localStorage.setItem(MINE, JSON.stringify(a.slice(0, 30))); } catch (e) {} }
+  function mineAdd(code, name) { var a = mineGet().filter(function (x) { return x.code !== code; }); a.unshift({ code: code, name: String(name || '').slice(0, 20), t: Date.now() }); mineSet(a); mineDraw(); }
+  function mineDrop(code) { mineSet(mineGet().filter(function (x) { return x.code !== code; })); mineDraw(); }
+  function mineDraw() {
+    var a = mineGet(), box = $('mine'); if (!box) return;
+    show('mineBox', a.length > 0); box.textContent = '';
+    a.forEach(function (x) {
+      var row = document.createElement('div'); row.className = 'row';
+      var b = document.createElement('b'); b.textContent = x.code; row.appendChild(b);
+      var s = document.createElement('span'); s.textContent = x.name + (x.t ? ' · ' + new Date(x.t).toLocaleDateString('ko-KR') : ''); row.appendChild(s);
+      var o = document.createElement('button'); o.type = 'button'; o.className = 'd-btn ghost small'; o.textContent = '열기';
+      o.onclick = function () { $('oCode').value = x.code; $('oPin').focus(); $('fOpen').scrollIntoView({ behavior: 'smooth' }); };
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'd-btn danger small'; d.textContent = '지우기';
+      d.onclick = function () { $('dCode').value = x.code; $('dPin').value = ''; $('dPin').focus(); msg('dMsg', x.code + ' 반의 PIN 을 넣고 「반 지우기」를 눌러요.'); };
+      var f = document.createElement('button'); f.type = 'button'; f.className = 'd-btn ghost small'; f.textContent = '빼기'; f.title = '반은 그대로 두고 이 기기 목록에서만 빼요';
+      f.onclick = function () { mineDrop(x.code); };
+      row.appendChild(o); row.appendChild(d); row.appendChild(f); box.appendChild(row);
+    });
+  }
+  function deleteClassFlow(code, pin, msgId, done) {
+    var typed = prompt('반을 지우면 모든 학생 기록과 이어하기 저장이 사라져요. 되돌릴 수 없어요.\n정말 지우려면 반 코드 ' + code + ' 를 한 번 더 적어 주세요.');
+    if (typed == null) return;
+    if (typed.trim().toUpperCase() !== code) { msg(msgId, '반 코드가 달라서 지우지 않았어요.'); return; }
+    call({ action: 'deleteClass', code: code, pin: pin }).then(function (res) {
+      if (!res.ok) { msg(msgId, res.msg || '지우지 못했어요.'); return; }
+      mineDrop(code);
+      try { var s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.code === code) localStorage.removeItem(KEY); var s2 = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (s2 && s2.code === code) sessionStorage.removeItem(KEY); } catch (e) {}
+      if (done) done(); msg(msgId, code + ' 반을 지웠어요. 이제 이 반 코드로는 참여할 수 없어요.', true);
+    });
+  }
 
   // ---------------------------------------------------------- 기억하기
   function loadSess() {
@@ -231,7 +287,7 @@
       if (!res.lessons[lesson] && ls.length) {
         lesson = ls.sort(function (a, b) { return res.lessons[b].students.length - res.lessons[a].students.length; })[0];
       }
-      show('login', false); show('made', false); show('board', true);
+      show('login', false); show('made', false); show('board', true); try { if (res && res.cls) mineAdd(res.cls.code, res.cls.name); } catch (e) {}
       render();
       startTimer();
       cb && cb(true, res);
@@ -252,7 +308,7 @@
       if (!res.ok) return msg('nMsg', res.msg || '만들지 못했어요.');
       msg('nMsg', '');
       $('nPin').value = ''; $('nPin2').value = '';
-      $('mName').textContent = res.name; $('mCode').textContent = res.code;
+      $('mName').textContent = res.name; $('mCode').textContent = res.code; mineAdd(res.code, res.name);
       var link = studentLink(res.code, 'L1');
       $('mLink').textContent = link;
       $('mCopy').onclick = function () { copy(res.code, this); };
@@ -444,15 +500,20 @@
     });
   };
   $('bDelete').onclick = function () {
-    var typed = prompt('반을 지우면 모든 학생 기록이 사라져요. 되돌릴 수 없어요.\n정말 지우려면 반 코드 ' + sess.code + ' 를 적어 주세요.');
-    if (typed == null) return;
-    if (typed.trim().toUpperCase() !== sess.code) { alert('반 코드가 달라서 지우지 않았어요.'); return; }
-    call({ action: 'deleteClass', code: sess.code, pin: sess.pin }).then(function (res) {
-      if (!res.ok) { msg('bMsg', res.msg || '지우지 못했어요.'); return; }
-      logout('반을 지웠어요.');
-      msg('oMsg', '반을 지웠어요.', true);
-    });
+    var code = sess.code;
+    deleteClassFlow(code, sess.pin, 'bMsg', function () { logout('반을 지웠어요.'); msg('oMsg', code + ' 반을 지웠어요.', true); });
   };
+  $('fDel').onsubmit = function (ev) {
+    ev.preventDefault();
+    var code = $('dCode').value.toUpperCase().replace(/[^A-Z0-9]/g, ''), pin = $('dPin').value.replace(/\D/g, '');
+    if (code.length !== 5) { msg('dMsg', '반 코드 5글자를 적어 주세요.'); return false; }
+    if (pin.length < 6) { msg('dMsg', '그 반의 PIN(숫자 6~8자리)을 적어 주세요.'); return false; }
+    $('dGo').disabled = true;
+    deleteClassFlow(code, pin, 'dMsg', function () { $('dCode').value = ''; $('dPin').value = ''; });
+    setTimeout(function () { $('dGo').disabled = false; }, 800);
+    return false;
+  };
+  mineDraw();
 
   // ---------------------------------------------------------- CSV
   $('bCsv').onclick = function () {
