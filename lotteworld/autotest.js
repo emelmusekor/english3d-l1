@@ -53,7 +53,7 @@
       await want(5); log('s5 ok');
     }
     if (G.S.stage === 5) {
-      await talk('jiho'); await talk('teacher', -1, 0.3); await at(11, -8.2); await at(-33.4, -6.1); await at(29.9, 38); await talk('teacher', 0, 1);
+      await talk('jiho'); await talk('teacher', -1, 0.3); await at(11, -8.2); await at(-33.4, -6.1); await at(29.9, 38); await talk('teacher', 0, 1); { let k = 0; while (!(window.__lwXW && window.__lwXW.walk && !window.__lwXW.blink) && k++ < 400) await wait(100); } await at(40, 38);
       await wait(300);
       document.getElementById('wName').value = '김민수';
       ['chk1', 'chk2', 'chk3'].forEach(i => document.getElementById(i).checked = true);

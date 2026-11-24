@@ -1140,7 +1140,7 @@ slab(3.7, 4.2, 0xffe066, 29.9, 38, 0.035);                                 // �
 slab(7, 31.2, 0xb5524a, 35.5, 30.6);                                       // 붉은 포장 차도
 slab(0.15, 31.2, 0xffe066, 35.5, 30.6, 0.04);
 floorText('30', 2.4, 34, 28, { fg: '#ffffff' }); floorText('어린이보호구역', 1.0, 37.2, 24, { fg: '#ffffff' }, E);
-for (let k = 0; k < 6; k++) slab(0.9, 3.6, k % 2 ? 0xffffff : 0xffe066, 32.6 + k * 1.1, 38, 0.045); // 정문 앞 횡단보도 (우리는 건너지 않아요)
+for (let k = 0; k < 6; k++) slab(0.9, 3.6, k % 2 ? 0xffffff : 0xffe066, 32.6 + k * 1.1, 38, 0.045); // 정문 앞 횡단보도 (신호등을 보고 건너요)
 flat(1.6, 31.2, 0xd9d2c5, 39.9, 30.6);
 wall(0.3, 2.2, 31.2, 0xd8dcd3, 41, 30.6);                                  // 우성1차아파트 돌 옹벽
 for (const z of [20.5, 30, 41.5]) { box(4.2, 26, 9, 0xf4f4f1, 43.6, 13, z); for (let j = 0; j < 9; j++) box(0.08, 1.1, 7.6, 0x9fb7cf, 41.48, 3 + j * 2.6, z); }
@@ -1159,9 +1159,20 @@ function wtree(x, z, s = 1) { // 잎이 조금 남은 겨울 은행나무
   return g;
 }
 rail(0.14, 16.9, 31.8, 27.75); rail(0.14, 6.2, 31.8, 42.9);
-block(35.2, 14.9, 46, 46);                                                 // 더 안쪽으로는 못 가요 (그 전에 '차도!' 로 끝나요)
+block(35.2, 14.9, 46, 35.7); block(35.2, 40.3, 46, 46); block(40.9, 35.7, 46, 40.3); // 차도 안쪽으로는 못 가요. 횡단보도(z 35.7~40.3)로만 건너편 보도까지
+// 보행자 신호등 (양쪽): 초록불 8초(마지막 3초는 깜빡) → 빨간불 12초. 초록불일 때 차들이 횡단보도 앞에서 멈춰요
+const XW = { x1: 32.4, x2: 39.0, z1: 35.8, z2: 40.2, t: 14, walk: false, blink: false, carStop: false, lights: [], inside: false };
+for (const [x, z, ry] of [[31.4, 35.4, E], [39.6, 40.6, W]]) {
+  cyl(0.07, 0.07, 2.6, 0x495057, x, 1.3, z);
+  const g = grp(x, z, ry); box(0.42, 0.86, 0.3, 0x212529, 0, 2.75, 0, g);
+  const red = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.04), new THREE.MeshBasicMaterial({ color: 0x5c1a1a })); red.position.set(0, 2.96, 0.16); g.add(red);
+  const grn = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.04), new THREE.MeshBasicMaterial({ color: 0x163d22 })); grn.position.set(0, 2.55, 0.16); g.add(grn);
+  red.userData.dyn = 1; grn.userData.dyn = 1; g.userData.dyn = 1;
+  const r2 = textPlane('🚶', 0.26, { fs: 64, bg: null }, g); r2.position.set(0, 2.55, 0.185);
+  XW.lights.push({ red, grn });
+}
 { const p = cyl(0.09, 0.09, 3.6, 0xffd43b, 31.9, 1.8, 40.3); const b = box(0.4, 1.0, 0.3, 0x222222, 31.9, 3.3, 40.3); ball(0.13, 0xe03131, 31.9, 3.55, 40.12); ball(0.13, 0x2f9e44, 31.9, 3.1, 40.12); }
-signPost('🚸 정문을 나와 왼쪽으로!\n길은 건너지 않아요', 28.5, 34.9, E, { fs: 40 });
+signPost('🚸 버스는 정문을 나와 왼쪽!\n🚦 건널 때는 초록불에', 28.5, 34.9, E, { fs: 40 });
 
 // ---------- 석정로 (큰길) : 보도 · 버스 6대 · 차도 ----------
 flat(78, 4.4, 0xd9d2c5, -7.2, 17.1);                                       // 넓은 보도 (x -46~31.8)
@@ -1682,15 +1693,31 @@ function worldTick(dt, t) {
   if (LWFX.blades) LWFX.blades.rotation.x = t * 0.5;
   if (LWFX.swing) LWFX.swing.rotation.x = Math.sin(t * 0.9) * 0.85;
   // 지나가는 차
-  for (const c of TRAFFIC) { c.p = (c.p + dt * c.v / Math.abs(c.b - c.a)) % 1; const v = c.a + (c.b - c.a) * c.p; if (c.ax === 'x') c.g.position.set(v, 0, c.fix); else c.g.position.set(c.fix, 0, v); }
+  // 신호등
+  XW.t = (XW.t + dt) % 20; XW.walk = XW.t < 8; XW.blink = XW.t > 5 && XW.t < 8; XW.carStop = XW.t < 8.8 || XW.t > 19.2;
+  for (const L of XW.lights) {
+    const on = XW.walk && !(XW.blink && Math.floor(t * 3) % 2);
+    L.grn.material.color.setHex(on ? 0x40ff70 : 0x163d22); L.red.material.color.setHex(XW.walk ? 0x5c1a1a : 0xff3b3b);
+  }
+  for (const c of TRAFFIC) {
+    const np = (c.p + dt * c.v / Math.abs(c.b - c.a)) % 1, nv = c.a + (c.b - c.a) * np, cv = c.a + (c.b - c.a) * c.p;
+    // 초록불일 때는 횡단보도 앞에서 멈춰요 (이미 지나는 중이면 그대로 가요)
+    if (c.ax === 'z' && XW.carStop) { const lo = XW.z1 - 2.6, hi = XW.z2 + 2.6, inNow = cv > lo && cv < hi, inNext = nv > lo && nv < hi; if (!inNow && inNext) continue; }
+    c.p = np; if (c.ax === 'x') c.g.position.set(nv, 0, c.fix); else c.g.position.set(c.fix, 0, nv);
+  }
   // 주차장에서 나오는 차: 2.5초 기다렸다가 보도를 가로질러 나가요 (9초마다)
   DRIVE.t = (DRIVE.t + dt) % 9;
   { const k = DRIVE.t, car = DRIVE.car; car.visible = k < 5.6; car.rotation.y = N; car.position.z = k < 2.5 ? 22.8 : 22.8 - (k - 2.5) * 4; DRIVE.danger = k > 2.3 && k < 5.0;
     if (started && !dlgOpen && DRIVE.danger && P.x > DRIVE.x1 - 0.2 && P.x < DRIVE.x2 + 0.2 && P.z > 14.2 && P.z < 19.5 && Math.abs(car.position.z - P.z) < 2.6)
       crash('car', P.x > 20.5 ? 25.2 : 15.8, 17.2); }
   if (started && !dlgOpen) {
-    // 차도에 발을 들이면 끝! (정문 앞 횡단보도 — 우리 반은 건너지 않아요 / 주차장 진출입로 끝 — 그 앞은 큰길이에요)
-    if (P.x > 32.5 && P.z > 35.4 && P.z < 40.6) crash('road', 30.2, 38);
+    // 정문 앞 횡단보도: 초록불에만 건너요 (빨간불이면 처음부터, 깜빡일 때 새로 건너기 시작하면 감점)
+    const inXW = P.x > XW.x1 + 0.1 && P.x < XW.x2 && P.z > XW.z1 && P.z < XW.z2;
+    if (inXW) {
+      if (!XW.inside) { XW.inside = true; if (!XW.walk) { crash('red', P.x < 35.7 ? 30.2 : 40, 38); } else if (XW.blink) penalty('blink'); }
+      for (const c of TRAFFIC) if (c.ax === 'z' && Math.abs(c.g.position.x - P.x) < 1.6 && Math.abs(c.g.position.z - P.z) < 2.6) crash('car', P.x < 35.7 ? 30.2 : 40, 38);
+    } else XW.inside = false;
+    if (P.x > 32.5 && !inXW && P.z > 35.4 && P.z < 40.6 && P.x < 39.1) crash('road', 30.2, 38);
     else if (P.z < 14.6 && P.x > 17.2 && P.x < 23.8 && P.z > 11) crash('road', 25.2, 17.2);
     // 뛰면 감점: 달리기(Shift)를 0.6초 넘게 하면 그때부터 1초마다 점수가 깎여요. 에스컬레이터에서는 더 많이.
     if (running) { runT += dt; if (runT > 0.6) { runT -= 1.0; penalty(inEsc() ? 'esc' : 'run'); } } else runT = Math.max(0, runT - dt * 2);
@@ -1721,6 +1748,7 @@ function drawMapWorld(tx, tz, s) {
   mctx.fillStyle = '#5f3dc4'; mctx.fillText('플라이벤처', tx(40), tz(-22) + 4);
 }
 // 놀이 층(play.js)이 롯데월드 놀이기구에 태워 줄 때 쓰는 자리·모형 (이 단원 전용)
+window.__lwXW = XW;
 window.__lw = {
   CARO, MI, FLUME, LWFX, RINKV, FOOD, SPOTS, STAGE, SHIP, FLY, LW, FAC,
   zone: () => (P.z < -9.4 ? 'park' : P.z < 4.6 ? 'bus' : 'school'),          // 지금 내가 있는 구역
@@ -2204,7 +2232,7 @@ const myBus = () => Math.max(1, Math.min(L.classes || 6, S.cls || 1));
 
 // ---- 안전 점수: 100점에서 시작해요. 뛰면 깎이고, 50점 밑으로 내려가면 처음부터 다시 해요.
 //      차도에 들어가거나 차에 부딪히면 바로 처음부터 다시 시작해요. (자유 탐험에서는 적용하지 않아요)
-const RULE = Object.assign({ start: 100, min: 50, run: 5, esc: 10, wrong: 2 }, L.score || {});
+const RULE = Object.assign({ start: 100, min: 50, run: 5, esc: 10, wrong: 2, blink: 5 }, L.score || {});
 const scoreEl = (() => { try { const d = document.createElement('div'); d.className = 'pill'; d.id = 'safeBox'; d.innerHTML = '🛡️ <span class="lbl">안전 </span><b id="safeN">100</b><span class="lbl">점</span>'; const q = $('#questBox'); q.parentElement.insertBefore(d, q); return d; } catch (e) { return null; } })();
 const playing = () => S.stage < STAGES.length - 1;
 function scoreShow() { try { if (S.safe == null) S.safe = RULE.start; $('#safeN').textContent = Math.max(0, Math.round(S.safe)); scoreEl.classList.toggle('low', S.safe < RULE.min + 15); scoreEl.style.display = playing() ? '' : 'none'; } catch (e) {} }
@@ -2217,18 +2245,20 @@ function penalty(kind) {
   if (S.safe < RULE.min) { gameOver('score'); return; }
   if (kind === 'run') toast(`🏃 <b>뛰면 위험해요!</b> 안전 점수 −${n} (지금 ${S.safe}점 · ${RULE.min}점 밑이면 처음부터)`, 2600);
   else if (kind === 'esc') toast(`🛗 에스컬레이터에서는 <b>뛰지 않아요!</b> 안전 점수 −${n} (지금 ${S.safe}점)`, 3000);
+  else if (kind === 'blink') toast(`🚦 초록불이 <b>깜빡일 때는</b> 새로 건너지 말고 다음 초록불을 기다려요. 안전 점수 −${n}`, 3200);
 }
 window.addEventListener('e3d', (e) => { try { if (e.detail && e.detail.type === 'miss' && RULE.wrong) { penalty('wrong'); if (playing() && !stageState.over) toast(`🤔 다시 생각해 봐요. 안전 점수 −${RULE.wrong} (지금 ${S.safe}점)`, 2200); } } catch (er) {} });
 // 차도·차 사고: 처음부터. (x, z)는 자유 탐험일 때 되돌려 놓을 자리
 function crash(why, x, z) {
-  if (!playing()) { P.x = x; P.z = z; if (performance.now() - hazT > 1800) { hazT = performance.now(); beep('bad'); toast(why === 'car' ? '🚗 빵! 차가 나오고 있어요. 멈추고 살펴요.' : '🚸 여기는 차도예요. 보도로만 다녀요.', 3000); } return; }
+  if (!playing()) { P.x = x; P.z = z; if (performance.now() - hazT > 1800) { hazT = performance.now(); beep('bad'); toast(why === 'car' ? '🚗 빵! 차가 오고 있어요. 멈추고 살펴요.' : why === 'red' ? '🚦 빨간불이에요! 초록불을 기다려요.' : '🚸 여기는 차도예요. 보도로만 다녀요.', 3000); } return; }
   gameOver(why);
 }
 function gameOver(why) {
   if (stageState.over) return; stageState.over = true;
   const msg = {
     car: ['🚗 끼익— 쾅!', '주차장에서 나오는 차와 부딪혔어요. 진출입로 앞에서는 꼭 멈추고, 차가 다 지나간 뒤에 건너요.'],
-    road: ['🚸 여기는 차도예요!', '차도에 들어가면 큰 사고가 나요. 우리 반은 길을 건너지 않고 보도로만 걸어요.'],
+    road: ['🚸 여기는 차도예요!', '차도에 들어가면 큰 사고가 나요. 보도로만 걷고, 길은 횡단보도에서 초록불에 건너요.'],
+    red: ['🚦 빨간불이에요!', '빨간불에 횡단보도를 건너면 큰 사고가 나요. 초록불이 켜지면 좌우를 살피고 건너요.'],
     score: [`🛡️ 안전 점수가 ${RULE.min}점 밑으로 내려갔어요.`, '뛰지 않고, 살피고, 안전한 행동을 골라요.']
   }[why] || ['다시 해요', ''];
   beep('bad'); flash(why === 'score' ? '#495057' : '#e03131');
@@ -2257,7 +2287,7 @@ function stage1() {
     await say('선생님', '', '🇬🇧 오늘은 영어 시간이에요! 현장체험학습 길에서 6학년 영어 표현으로 말해 봐요.', { btn: '좋아요' });
     await english(L.eng.when);
     for (const q of L.pre) await quiz(q, '선생님');
-    await tell('선생님', `좋아요! ${S.cls}반은 ${S.cls}호차를 타요. 버스는 ${L.busPlace}에 있어요. 정문을 나가면 왼쪽으로 돌아요. 길은 건너지 않고, 학교 쪽 보도로 한 줄로 걸어요.`, '출발!');
+    await tell('선생님', `좋아요! ${S.cls}반은 ${S.cls}호차를 타요. 버스는 ${L.busPlace}에 있어요. 정문을 나가면 왼쪽으로 돌아요. 버스까지는 길을 건너지 않고, 학교 쪽 보도로 한 줄로 걸어요.`, '출발!');
     closeDlg(); s1walk();
   };
 }
@@ -2265,7 +2295,7 @@ function s1walk() {
   follow(); placeNPC('teacher', 28.7, 35.4, 0);
   setObj('🚶 운동장 동쪽 <b>정문</b>으로 나가요', () => [29.9, 38]);
   spot(29.9, 38, () => run(async () => {
-    await tell('선생님', '정문 앞 횡단보도는 건너지 않아요. 왼쪽으로 돌아서, 차도에서 먼 보도 안쪽으로 걸어요.', '네!');
+    await tell('선생님', '버스는 왼쪽이라 정문 앞 횡단보도는 건너지 않아요. 왼쪽으로 돌아서, 차도에서 먼 보도 안쪽으로 걸어요. (길을 건널 때는 꼭 신호등을 봐요!)', '네!');
     closeDlg(); placeNPC('teacher', 28.7, 21, 0);
     setObj('🚶 보도를 따라 <b>큰길 모퉁이</b> 쪽으로 걸어요', () => [29.9, 27.5]);
     spot(29.9, 27.5, () => run(async () => {
@@ -2316,6 +2346,7 @@ function stage2() {
     await quiz(L.bus.bag); await quiz(L.bus.belt); await quiz(L.bus.beltHow);
     beep('get'); await tell('', '🔒 찰칵! 안전벨트를 맸어요.', '좋아요');
     await quiz(L.bus.video, '선생님');
+    await quiz(L.bus.phone, '선생님');
     await tell('선생님', '출발하기 전에 버스 안 안전 장비 세 가지를 직접 찾아봐요. 비상망치, 소화기, 비상구!', '찾아볼게요');
     closeDlg(); s2tools();
   }), { label: '내 자리', r: 0.9 });
@@ -2546,8 +2577,15 @@ function stage6() {
             NPC.teacher.talk = async () => {
               mark('teacher', false);
               await english(L.eng.fun);
-              await tell('선생님', '모두 안전하게 돌아왔어요! 마지막으로, 현장체험학습 날 내가 꼭 지킬 안전 약속을 써 봐요.', '약속 쓰기 ✏️');
-              closeDlg(); openWriter();
+              await tell('선생님', '모두 안전하게 돌아왔어요! 이제 집에 가요. 길 건너 아파트로 가는 친구는 정문 앞 횡단보도로 건너요.', '네!');
+              await quiz(L.walk.blink, '선생님'); await quiz(L.walk.turn, '선생님');
+              closeDlg(); NPC.teacher.talk = null;
+              setObj('🚦 정문 앞 <b>횡단보도</b>를 <b>초록불</b>에 건너 맞은편 보도로 가요 (빨간불이면 처음부터!)', () => [40, 38]);
+              spot(40, 38, () => run(async () => {
+                good(2); toast('👍 초록불에, 좌우를 살피고 건넜어요! 별 +2', 2600);
+                await tell('선생님', '잘 건넜어요! 마지막으로, 현장체험학습 날 내가 꼭 지킬 안전 약속을 써 봐요.', '약속 쓰기 ✏️');
+                closeDlg(); openWriter();
+              }), { label: '건너편' });
             };
           }, { label: '정문' });
         }), { label: '버스' });
