@@ -283,9 +283,17 @@ function polish(root) {
 function setLite(on, why) {
   GFX.lite = on;
   resize();
-  scene.fog.near = on ? 26 : 55; scene.fog.far = on ? 80 : 160; camera.far = on ? 90 : 420; camera.updateProjectionMatrix();
-  sky.scale.setScalar(on ? 0.22 : 1); sunDisk.scale.set(on ? 16 : 60, on ? 16 : 60, 1); clouds.visible = !on; // 하늘 공도 보이는 거리 안으로
+  const s = GFX.soft; // CPU 로 그리면 더 가까이까지만 (물체 수가 줄어야 빨라져요)
+  GFX.fogAdd = -1; GFX.lv = on ? (s ? [16, 46, 50] : [26, 80, 90]) : [55, 160, 420]; liteFog();
+  sky.scale.setScalar(on ? (s ? 0.12 : 0.22) : 1); sunDisk.scale.set(on ? 9 : 60, on ? 9 : 60, 1); clouds.visible = !on; // 하늘 공도 보이는 거리 안으로
   if (why) try { toast(on ? '🎨 그래픽: 아주 가볍게 (G 키로 바꾸기)' : '🎨 그래픽: 선명하게 (G 키로 바꾸기)'); } catch (e) {}
+}
+// 안개·보이는 거리: 2.5D 는 카메라가 캐릭터에서 30m 넘게 떨어져 있어서 그만큼 더해요
+function liteFog() {
+  let iso = false; try { iso = CAM.iso; } catch (e) {}
+  const v = GFX.lv || [55, 160, 420], add = GFX.lite && iso ? 30 : 0;
+  if (GFX.fogAdd === add) return; GFX.fogAdd = add;
+  scene.fog.near = v[0] + add; scene.fog.far = v[1] + add; camera.far = v[2] + add; camera.updateProjectionMatrix();
 }
 function setQuality(high, why) {
   GFX.high = high; if (high && GFX.lite) setLite(false);
@@ -304,11 +312,11 @@ const fogBase = new THREE.Color(), skyTop = new THREE.Color(0x3f86d8), hsl = {};
 const perf = { t0: 0, frames: 0, done: false };
 let polishT = 1;
 function gfxTick(dt, now) {
-  sky.position.copy(camera.position);
+  sky.position.copy(camera.position); if (GFX.lite) liteFog();
   fogBase.copy(scene.fog.color); fogBase.getHSL(hsl);
   skyMat.uniforms.bottom.value.copy(fogBase);
   skyMat.uniforms.top.value.copy(fogBase).lerp(skyTop, hsl.s > 0.3 ? 0.55 : 0.15);
-  sunDisk.position.copy(camera.position).addScaledVector(SUN_DIR, GFX.lite ? 80 : 300);
+  sunDisk.position.copy(camera.position).addScaledVector(SUN_DIR, GFX.lite ? (GFX.soft ? 44 : 80) : 300);
   sunDisk.visible = hsl.l > 0.6 && hsl.s > 0.3;
   clouds.rotation.y += dt * 0.004;
   sun.position.set(P.x + SUN_DIR.x * 60, SUN_DIR.y * 60, P.z + SUN_DIR.z * 60); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
@@ -427,7 +435,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.1'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.2'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
