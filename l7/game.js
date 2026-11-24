@@ -2324,6 +2324,7 @@ function update(dt, t) {
     const dx = P.x - p.x, dz = P.z - p.z, d = Math.hypot(dx, dz);
     if (d < 6 && !n.follow) { const target = Math.atan2(dx, dz); let diff = target - g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); g.rotation.y += diff * Math.min(1, dt * 5); }
     if (!n.follow) p.y = 0;
+    { const tg = g.userData.tag; if (tg && !n.hideTag) tg.visible = g.position.distanceTo(camera.position) > 2.4; } // 카메라 바로 앞 사람의 이름표는 화면을 크게 가려서 숨겨요
     const m = g.userData.mark; if (m.visible) m.position.y = (m.userData.baseY || 2.75) + Math.sin(t * 4) * 0.1;
     const sc = d - (m.visible ? 3 : n.talk ? 1.2 : 0); // ❗ 붙은 미션 친구가 가장 먼저, 그다음 할 말이 있는 친구
     if (g.visible && d < 3.0 && sc < nd) { nd = sc; nearNPC = n; }

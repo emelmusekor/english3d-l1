@@ -97,7 +97,7 @@ body.touch .desk{display:none}
   #objText{font-size:15px}.hud .btns button{padding:6px 8px;font-size:13px}
   #dlgEn{font-size:22px}.choice{font-size:17px;flex-basis:100%}
   #writer .grid{grid-template-columns:1fr}.panel{padding:18px}
-  #nav{top:calc(var(--hudB,144px) + 6px)}#toast{top:calc(var(--hudB,144px) + 64px)}#sentBar{top:calc(var(--hudB,144px) + 40px)}
+  #nav{top:calc(var(--hudB,144px) + 6px)}#toast{top:calc(var(--hudB,144px) + 84px);width:max-content;max-width:92vw}#sentBar{top:calc(var(--hudB,144px) + 40px)}
   .hud{flex-wrap:wrap}#questBox{order:3;flex-basis:100%}.hud .btns{flex:1}
 }
 /* 휴대폰 세로: 위 칸 = 별·보석 줄 / 단추 줄 / 미션 칸 (단추가 세로로 길게 쌓이지 않게) */

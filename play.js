@@ -27,7 +27,7 @@ if (qs.has('autotest')) {
       el.textContent = Object.keys(seen).join(' ');
     } catch (e) {} }, 120);
   }
-  return;
+  if (!qs.has('playwalk')) return; // playwalk(개발용): 자동 테스트를 놀이 층과 함께 돌리며 겹치는 곳을 적어요
 }
 if (qs.has('noplay') || !((G.lessonNo >= 1 && G.lessonNo <= 12) || (G.lessonNo === 13 && window.__lw))) return; // 13 = 롯데월드 단원(전용 모드)
 const THREE = window.THREE, P = G.P, CAM = G.CAM, scene = G.scene, camera = G.camera, keys = G.keys;
@@ -92,8 +92,8 @@ const mat = (c) => MATS[c] || (MATS[c] = new THREE.MeshStandardMaterial({ color:
 const tag = (m) => { m.userData.camBig = 0; return m; }; // 카메라 가림 계산에서 빼요
 const add = (m, x, y, z, parent) => { m.position.set(x, y, z); (parent || scene).add(tag(m)); return m; };
 const box = (w, h, d, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const cyl = (rt, rb, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 14), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const sph = (r, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.SphereGeometry(r, r < 0.13 ? 8 : 12, r < 0.13 ? 5 : 8), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const cyl = (rt, rb, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 12), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const sph = (r, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.SphereGeometry(r, r < 0.13 ? 7 : r < 0.5 ? 10 : 12, r < 0.13 ? 4 : r < 0.5 ? 6 : 8), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const grp = (x, z, rot, parent) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot || 0; (parent || scene).add(g); return g; };
 const dyn = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x || 0, y || 0, z || 0); g.userData.dyn = 1; parent.add(g); return g; }; // 움직이는 부분 (합치지 않아요)
 const noRay = (o) => { o.raycast = () => {}; o.userData.pol = 1; return o; };
@@ -1067,7 +1067,7 @@ function needMore(price) {
     const nav = document.querySelector('#nav'); if (nav) { nav.classList.remove('pgGlow'); void nav.offsetWidth; nav.classList.add('pgGlow'); setTimeout(() => nav.classList.remove('pgGlow'), 3200); }
   } catch (e) {}
   gateEl();
-  G.toast('💎 보석이 <b>' + k + '개</b> 더 필요해요<br><small>미션 길에 있는 보석을 모으거나, 미션을 하면 얻을 수 있어요</small>' + extra, 4400);
+  G.toast('💎 보석이 <b>' + k + '개</b> 더 필요해요<br><small>미션을 하거나, 길에 있는 보석을 모아요</small>' + extra, 4400);
   G.beep('bad'); fire('poor', { need: k });
 }
 // 놀이 기구 쓰기: 무료·이용권이 있으면 바로, 아니면 보석 확인 → 영어 관문 → 값 내기 → 작동
@@ -1118,7 +1118,10 @@ function gateEl() {
     + '#playGate .pgCh .choice{border-radius:16px;box-shadow:0 3px 0 #d0d7e2;transition:transform .08s,box-shadow .08s}#playGate .pgCh .choice:active:not(:disabled){transform:translateY(3px);box-shadow:none}'
     + '#playGate .pgCh .choice.right{box-shadow:0 3px 0 #2b8a3e}#playGate .pgCh .choice.wrong{box-shadow:0 3px 0 #e03131}#playGate .pgPic{background:#f1f8ff;border-radius:14px;padding:6px 12px;display:inline-block}'
     + '@keyframes pgGlow{0%,100%{filter:none}50%{filter:drop-shadow(0 0 10px #ffd43b) drop-shadow(0 0 4px #ffd43b) brightness(1.15)}}#nav.pgGlow{animation:pgGlow .64s 5}'
-    + '@media (max-width:640px){#playGate .pgEn{font-size:21px}#playGate .pgPic{font-size:24px}#playGate .pgCh .choice{font-size:17px;flex-basis:100%}}';
+    + '@media (max-width:640px){#playGate .pgEn{font-size:21px}#playGate .pgPic{font-size:24px}#playGate .pgCh .choice{font-size:17px;flex-basis:100%}'
+    + '#playGate .pgTag{flex:1 1 100%;order:9}#playGate .pgX{margin-left:auto}#playGate .pgTitle{font-size:16px}#toast{width:max-content;max-width:92vw}}'   /* 좁은 화면: 안내 글은 한 줄 따로, 말풍선은 화면 너비까지 */
+    + '@media (pointer:coarse){#playGate .pgX{min-height:42px;padding:8px 14px;font-size:16px}#playGate .pgSpk{min-height:44px;padding:10px 16px}#playGate .pgCh .choice{min-height:48px}}'  /* 손가락으로 누르기 좋은 크기 */
+    + 'body.pgOpen #actBtn,body.pgOpen #jumpBtn{opacity:0;pointer-events:none}';                                                      /* 관문 창이 떠 있는 동안 터치 단추는 숨겨요 (창 모서리와 겹쳐요) */
   document.head.appendChild(st);
   const d = document.createElement('div'); d.id = 'playGate';
   d.innerHTML = '<div class="pgTop"><span class="pgTitle"></span><span class="pgCost"></span><span class="pgTag"></span><button type="button" class="pgX">✕ 그만두기</button></div><div class="pgPic"></div><div class="pgEn"></div><div class="pgKo"></div><div class="pgCh"></div><div class="pgRow"><button type="button" class="pgSpk"></button><span class="pgHint"></span></div>';
@@ -1138,10 +1141,10 @@ function sayAll(list, who) { // 차례로 읽어 줘요. 걸리는 시간(ms)을
 function openGate(o, onPass) {
   gateEl(); Object.assign(GATE, { open: true, specs: o.specs, i: 0, onPass, title: o.title, cost: o.cost | 0, done: false, ride: !!o.ride });
   if (LOCK) LOCK(true);
-  GATE.el.classList.add('show'); showStep(); fire('gate', { title: o.title });
+  GATE.el.classList.add('show'); document.body.classList.add('pgOpen'); showStep(); fire('gate', { title: o.title });
 }
 function closeGate(cancel) {
-  if (!GATE.open) return;
+  if (!GATE.open) return; document.body.classList.remove('pgOpen');
   GATE.open = false; GATE.el.classList.remove('show'); GATE.btns = [];
   if (cancel) { for (const t of GATE.timers) clearTimeout(t); GATE.timers = []; try { speechSynthesis.cancel(); } catch (e) {} G.beep('click'); }
   let talk = false; try { talk = document.querySelector('#dlg').classList.contains('show'); } catch (e) {} // 엔진 대화가 떠 있으면 잠금은 그대로 둬요
@@ -1266,11 +1269,11 @@ function jumpMe() { if (P.jy <= 0 && (!ST.ride || roam(ST.ride))) { P.vy = 5.2; 
 const MATD = {};
 const matD = (c) => MATD[c] || (MATD[c] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, metalness: 0, side: THREE.DoubleSide }));
 const glow = (c, k) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k == null ? 0.6 : k, roughness: 0.5 });
-const cap = (r, len, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, r < 0.1 ? 2 : 3, r < 0.1 ? 7 : 10), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const cone = (r, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 14), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const tor = (R, r, c, x, y, z, parent, arc) => add(new THREE.Mesh(new THREE.TorusGeometry(R, r, R < 0.25 ? 5 : 6, R < 0.25 ? 12 : 20, arc || PI * 2), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const cap = (r, len, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, r < 0.25 ? 2 : 3, r < 0.1 ? 6 : r < 0.25 ? 8 : 10), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const cone = (r, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 12), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const tor = (R, r, c, x, y, z, parent, arc) => add(new THREE.Mesh(new THREE.TorusGeometry(R, r, R < 0.8 ? 5 : 6, R < 0.25 ? 10 : R < 0.8 ? 16 : 20, arc || PI * 2), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const ell = (r, sx, sy, sz, c, x, y, z, parent) => { const m = sph(r, c, x, y, z, parent); m.scale.set(sx, sy, sz); return m; };
-const lathe = (pts, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 16), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const lathe = (pts, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 12), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const flatX = (m) => { m.rotation.z = PI / 2; return m; };  // 옆으로 눕히기 (x 축 방향)
 const flatZ = (m) => { m.rotation.x = PI / 2; return m; };  // 앞뒤로 눕히기 (z 축 방향)
 const EMS = {};
@@ -2469,7 +2472,24 @@ function lwThing(kind, emoji, name, at, price, re) {
   th.label = () => th.busy > 0 ? null : name + (lwOpen() ? '' : ' 🔒');
   return th;
 }
+// 2.5D: 타는 동안 캐릭터를 가리는 지붕·풍선은 비쳐 보이게 해요 (엔진은 내가 서 있던 탑승장 자리 기준으로만 지붕을 숨겨서요)
+const LWG = { map: new Map(), mats: new Map(), list: null, t: 9, ray: new THREE.Raycaster() };
+function lwGhostOff() { for (const [m, mat] of LWG.map) m.material = mat; LWG.map.clear(); LWG.list = null; LWG.t = 9; }
+function lwGhost(s, dt) {
+  if ((LWG.t += dt) < 0.15) return; LWG.t = 0;
+  if (!LWG.list) { LWG.list = []; scene.traverse(m => { if (m.isMesh && m.userData.camBig === 1 && !Array.isArray(m.material)) LWG.list.push(m); }); }
+  const now = new Set(), ray = LWG.ray;
+  const hit = (high) => { for (const h of ray.intersectObjects(LWG.list, false)) { const m = h.object; if (high && !(m.userData.camLowY >= 1.2)) continue; let ok = true; for (let a = m; a; a = a.parent) if (!a.visible) { ok = false; break; } if (ok) now.add(m); } };
+  try {
+    ray.ray.origin.set(s.x, s.y + 1.3, s.z); ray.ray.direction.set(0, 1, 0); ray.near = 0; ray.far = 14; hit(false);             // 머리 바로 위 (지붕·풍선)
+    const o0 = camera.position, dx = s.x - o0.x, dy = s.y + 0.5 - o0.y, dz = s.z - o0.z, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len > 1) for (const q of [[0, 0], [0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) { ray.ray.origin.copy(o0); ray.ray.direction.set(dx + q[0], dy, dz + q[1]).normalize(); ray.far = len - 0.6; hit(true); } // 카메라와 나 사이, 내 둘레까지 (땅에 닿지 않은 것만. 벽·기둥은 그대로)
+  } catch (e) {}
+  for (const [m, mat] of LWG.map) if (!now.has(m)) { m.material = mat; LWG.map.delete(m); }
+  for (const m of now) if (!LWG.map.has(m)) { const mat = m.material; let g = LWG.mats.get(mat); if (!g) { g = mat.clone(); g.transparent = true; g.opacity = 0.2; g.depthWrite = false; LWG.mats.set(mat, g); } LWG.map.set(m, mat); m.material = g; }
+}
 function lwEnd(r, early, silent) {
+  lwGhostOff();
   const th = r.th, o = th.o; ST.ride = null; unseat(); if (CAM.me) CAM.me.visible = CAM.third; if (!silent) blink();
   if (CAM.iso) { CAM.tx = P.x; CAM.tz = P.z; } P.jy = 0; P.vy = 0; th.busy = 2;
   if (o.onEnd) o.onEnd(r, early);
@@ -2482,6 +2502,7 @@ function lwRide(th, o) { // o: { node, seatY, pose, hide, cam: 'fixed' | 'chase'
   th.o = o;
   th.use = () => {
     if (ST.ride) leave(true);
+    if (o.pick) { try { o.node = o.pick() || o.node; } catch (e) { warn(e); } }
     const r = ST.ride = { kind: 'lw', th, t: 0, wait: !!o.wait, tx: P.x, tz: P.z, cy: null, sy: null, tip: false }; P.jy = 0; P.vy = 0;
     if (!r.wait) { blink(); G.beep([[523, .07], [659, .07], [784, .12]]); tell(th.kind, o.start, 3800); } else G.toast(o.waitMsg || '잠깐 기다려요…', 2400);
     if (o.onStart) o.onStart(r); fire('ride', { kind: th.kind });
@@ -2502,8 +2523,11 @@ function lwCam(r, dt) {
   if (CAM.iso) { // 2.5D: 엔진과 같은 각도·같은 카메라 높이로 따라가요
     const yaw = o.isoYaw != null ? o.isoYaw : CAM.isoYaw, pit = -0.98, cp = Math.cos(pit), sp = Math.sin(pit), sy = Math.sin(yaw), cy = Math.cos(yaw), k = Math.min(1, dt * 5);
     r.tx += (s.x - r.tx) * k; r.tz += (s.z - r.tz) * k; const camY = 1 - sp * 30, dist = (camY - 1 - r.sy) / -sp;
-    camera.position.set(r.tx + sy * 2.2 + sy * cp * dist, camY, r.tz + cy * 2.2 + cy * cp * dist); camera.rotation.set(pit, yaw, 0);
-  } else if (!CAM.third) { camera.position.set(s.x, r.sy + (o.eye != null ? o.eye : o.seatY + 1.62), s.z); camera.rotation.set(-0.14, r.cy + PI, 0); } // 내 눈
+    camera.position.set(r.tx + sy * 2.2 + sy * cp * dist, camY, r.tz + cy * 2.2 + cy * cp * dist); camera.rotation.set(pit, yaw, 0); lwGhost(s, dt);
+    return;
+  }
+  if (LWG.map.size) lwGhostOff(); // 보기를 바꿨으면 되돌려요
+  if (!CAM.third) { camera.position.set(s.x, r.sy + (o.eye != null ? o.eye : o.seatY + 1.62), s.z); camera.rotation.set(-0.14, r.cy + PI, 0); } // 내 눈
   else if (o.cam === 'fixed') look(o.camAt[0], o.camAt[1], o.camAt[2], s.x, r.sy + 0.4, s.z);     // 3D: 한 자리에서 지켜보는 카메라 (빙글빙글 돌지 않아요)
   else { const f = o.off, fx = Math.sin(r.cy), fz = Math.cos(r.cy), rx = -fz, rz = fx; look(s.x + rx * f[0] + fx * f[2], r.sy + f[1], s.z + rz * f[0] + fz * f[2], s.x, r.sy + (o.ty != null ? o.ty : 0.5), s.z); } // 3D: 일정한 거리에서 따라가요
 }
@@ -2531,12 +2555,14 @@ function initLW() {
       onStart: () => tune([523, 659, 784, 1046, 784, 659, 523, 659, 784, 1046, 1318, 1046], 0.34, 0.26) });
     addSign(th, 3.0, at[0], at[1]); } catch (e) { warn(e); }
   // 🗼 자이로드롭: 의자 고리에 앉아 천천히 올라갔다가 슝!
-  try { const ring = MIX.ring, seat = ring.children[1], node = dyn(seat, 0, -0.2, 0.24), X = MIX.drop[0], Z = MIX.drop[1];
+  try { const ring = MIX.ring, X = MIX.drop[0], Z = MIX.drop[1], seats = ring.children.filter(c => { const d = hyp(c.position.x, c.position.z); return d > 1.5 && d < 2.6; });
+    const seatNode = (c) => c.userData.playSeat || (c.userData.playSeat = dyn(c, 0, -0.2, 0.24)), node = seatNode(seats[1] || ring.children[1]);
+    const pick = () => { let dx = P.x - X, dz = P.z - Z; if (CAM.iso) { dx = Math.sin(CAM.isoYaw); dz = Math.cos(CAM.isoYaw); } let b = null, bs = -1e9; for (const c of seats) { const s = c.position.x * dx + c.position.z * dz; if (s > bs) { bs = s; b = c; } } return b ? seatNode(b) : node; }; // 2.5D 에서는 카메라 쪽(탑에 가리지 않는 쪽), 3D 에서는 내가 서 있는 쪽 의자
     const at = lwNear(X + 2.4, Z + 3.8), th = lwThing('lwdrop', '🗼', '자이로드롭', at, 3, /안전바|높은 곳에서 갑자기|키 1\d\dcm|운휴|무서워서/);
     th.ly = ring.position.y; th.still = 0;
     th.closed = () => { if (th.still > 1.2) { G.toast('🚧 자이로드롭은 지금 점검 중이에요. 조금 뒤에 다시 와요', 2600); return false; } return true; };
     th.tick = (dt) => { th.still = Math.abs(ring.position.y - th.ly) < 1e-4 && ring.position.y > 3 ? th.still + dt : 0; th.ly = ring.position.y; };
-    lwRide(th, { node, seatY: -0.66, cam: 'chase', off: [4.2, 1.3, 5.2], yk: 7, dur: 22, wait: () => ring.position.y < 2.7, waitMsg: '🗼 키 130cm 이상 · 소지품은 보관함에!<br><small>의자가 내려오면 타요…</small>',
+    lwRide(th, { node, pick, seatY: -0.66, cam: 'chase', off: [4.2, 1.3, 5.2], yk: 7, dur: 22, wait: () => ring.position.y < 2.7, waitMsg: '🗼 키 130cm 이상 · 소지품은 보관함에!<br><small>의자가 내려오면 타요…</small>',
       start: '🗼 <b>안전바가 내려가요 · 찰칵!</b><br><small>등을 붙이고 손잡이를 잡아요 · ' + eKey() + ' 멈춰 주세요(내리기)</small>', tip: '🗼 높은 곳에서 멈춰도 자리에 앉아 안내를 기다려요',
       onStart: (r) => { r.n = 0; r.hi = false; },
       onStep: (r) => { const y = ring.position.y; if (y > 14) r.hi = true; if (r.hi && y < 2.4) { r.hi = false; r.n++; G.beep([[220, .08], [150, .12]]); } return r.n >= 3 || r.t > 26; } });
@@ -2723,9 +2749,40 @@ function hud() {
     else if (ST.actText != null) { act.textContent = ST.actText; ST.actText = null; }
   }
 }
+function farCull() { // 먼 놀이 기구는 그리지 않고(카메라가 안 보는 층으로 옮겨요) 움직임도 쉬어요. 가벼운 화질에서는 더 가까이에서만 그려요
+  const r = ST.ride, R = (G.GFX.high ? 64 : 38) * (r && r.kind === 'plane' ? 1.7 : 1); // 비행기에서는 더 멀리까지 보여요
+  for (const th of ST.things) {
+    if (!th.objs.length || th.kind === 'plane' || th.kind === 'bus') continue;
+    let d = 1e9, n = 0; for (const o of th.objs) if (o.parent === scene) { n++; const q = hyp(o.position.x - P.x, o.position.z - P.z); if (q < d) d = q; }
+    const off = n > 0 && d > (th.farOff ? R : R + 5) && !(r && r.th === th) && !(ST.tgt && ST.tgt.th === th) && !(th.busy > 0);
+    if (off !== !!th.farOff) { th.farOff = off; const L = off ? 1 : 0; for (const o of th.objs) o.traverse(x => x.layers.set(L)); }
+  }
+}
 function signCull() { // 먼 간판은 쉬어요 (가벼운 화질에서는 더 가까이에서만)
   const far = G.GFX.high ? 60 : 38, cx = camera.position.x, cz = camera.position.z;
   for (const th of ST.things) { const s = th.sign; if (!s || th.hidden || th.kind === 'plane' || th.kind === 'scooter' || th.kind === 'bike') continue; s.visible = hyp(s.position.x - cx, s.position.z - cz) < far && !(ST.ride && ST.ride.th === th); }
+}
+// 개발용(?autotest&playwalk): 미션을 진행하는 동안 놀이 물건이 미션 사람·물건·목표(노란 고리)나 가는 길과 겹치는지 적어요 → <pre id="playWalk">
+const WALK = qs.has('playwalk') ? { seen: {}, t: 0, key: '', el: null } : null;
+function walkCheck(dt) {
+  if ((WALK.t += dt) < 0.2) return; WALK.t = 0;
+  if (!WALK.el) { WALK.el = document.createElement('pre'); WALK.el.id = 'playWalk'; WALK.el.style.display = 'none'; document.body.appendChild(WALK.el); }
+  let st = 0; try { st = (G.S.stage | 0) + 1; } catch (e) {} const put = (k) => { WALK.seen['s' + st + ' ' + k] = 1; };
+  const pts = [];
+  for (const id in G.NPC) { const n = G.NPC[id]; if (n.g.visible && !n.follow && (n.talk || (n.g.userData.mark && n.g.userData.mark.visible))) pts.push([n.g.position.x, n.g.position.z, 'npc:' + id]); }
+  for (const it of G.items) if (it.alive) pts.push([it.x, it.z, 'item']);
+  let op = null; try { const o = G.objective; op = o && o.pos && o.pos(); } catch (e) {} if (op) pts.push([op[0], op[1], 'obj']);
+  const solid = [];
+  for (const th of ST.things) {
+    if (th.hidden) { if (th.own) put('hid ' + th.kind); continue; }
+    const cs = th.fp && th.fp.length ? th.fp : [{ x: th.x, z: th.z, r: th.solidR || 0.9 }];
+    for (const c of cs) for (const q of pts) if (hyp(q[0] - c.x, q[1] - c.z) < c.r + 0.3) put('in ' + th.kind + '<-' + q[2] + '@' + Math.round(q[0]) + ',' + Math.round(q[1]));
+    if (th.solidR) solid.push(th);
+  }
+  if (op) { const key = st + ':' + Math.round(op[0]) + ',' + Math.round(op[1]) + ':' + Math.round(P.x / 4) + ',' + Math.round(P.z / 4);
+    if (key !== WALK.key) { WALK.key = key; try { if (!G.NAV.grid) G.navGrid(); const pa = G.navFind(P.x, P.z, op[0], op[1]); if (pa) { WALK.seen['paths'] = (WALK.seen['paths'] | 0) + 1; for (const q of pa) for (const th of solid) if (hyp(q[0] - th.x, q[1] - th.z) < th.solidR + 0.25) put('path ' + th.kind + '@' + Math.round(th.x) + ',' + Math.round(th.z)); } else put('nopath'); } catch (e) { put('err ' + e.message); } } }
+  WALK.max = Math.max(WALK.max | 0, pts.length); WALK.n = (WALK.n | 0) + 1;
+  WALK.el.textContent = 'things=' + ST.things.length + ' checks=' + WALK.n + ' maxPts=' + WALK.max + ' | ' + Object.keys(WALK.seen).map(k => k === 'paths' ? 'paths=' + WALK.seen[k] : k).join(' | ');
 }
 function tick(dt, t) {
   if (ST.dead) return;
@@ -2733,7 +2790,7 @@ function tick(dt, t) {
     if (!G.FX2.ready) return;
     let ok = false; try { ok = init(); } catch (e) { warn(e); }
     if (!ok) { ST.dead = true; return; }
-    ST.ready = true; ST.act = document.querySelector('#actBtn'); fire('ready', { kinds: ST.kinds.slice() });
+    ST.ready = true; ST.act = document.querySelector('#actBtn'); if (WALK) setInterval(safe(() => walkCheck(1)), 100); // 자동 테스트는 화면을 드물게 그려서, 시계로 따로 살펴요 fire('ready', { kinds: ST.kinds.slice() });
     return;
   }
   ST.t = t;
@@ -2741,13 +2798,13 @@ function tick(dt, t) {
   twTick(dt);
   const r0 = ST.ride;
   if (r0 && !roam(r0) && (G.dlgOpen || G.busy)) leave(true); // 대화가 열리면 바로 내려요
-  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); decoTick(); signCull(); if (ST.lw) lwTick(); }
+  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); decoTick(); signCull(); farCull(); if (ST.lw) lwTick(); }
   // 내 속도 (공 차기용)
   const sx = P.x - ST.lx, sz = P.z - ST.lz; ST.lx = P.x; ST.lz = P.z;
   if (dt > 1e-4 && hyp(sx, sz) < 2) { ST.pvx = sx / dt; ST.pvz = sz / dt; } else { ST.pvx = ST.pvz = 0; }
   if (ST.boostT > 0) ST.boostT -= dt;
   const r = ST.ride, free = !r || roam(r);
-  for (const th of ST.things) { if (th.busy > 0) th.busy -= dt; if (th.tick && !th.hidden) th.tick(dt, t); }
+  for (const th of ST.things) { if (th.busy > 0) th.busy -= dt; if (th.tick && !th.hidden && !th.farOff) th.tick(dt, t); }
   // 공
   const canKick = free && G.started && !G.dlgOpen && BALL.until > ST.t;
   if (BALL.was && BALL.until <= ST.t) { BALL.was = false; G.toast('⚽ 공 차기 시간이 끝났어요. 공이 다시 잠겼어요 🔒', 2200); }
