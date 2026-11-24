@@ -1038,7 +1038,18 @@ for (const z of [20.5, 30, 41.5]) { box(4.2, 26, 9, 0xf4f4f1, 43.6, 13, z); for 
 sign('우성1차아파트', 0.7, 40.82, 3.2, 30, W, { bg: '#f4f4f1', fg: '#495057' });
 // 보행자 울타리 (차도와 보도 사이). 정문 앞 횡단보도 자리만 열려 있어요.
 const RAIL = 0x4dabf7;
-wall(0.14, 1.0, 16.9, RAIL, 31.8, 27.75); wall(0.14, 1.0, 6.2, RAIL, 31.8, 42.9);
+function rail(wd, dp, x, z) { // 충돌은 그대로, 모양은 기둥 + 가로대 두 줄
+  block(x - wd / 2, z - dp / 2, x + wd / 2, z + dp / 2);
+  const along = wd > dp, len = along ? wd : dp, n = Math.max(1, Math.round(len / 1.7));
+  for (const y of [0.5, 0.95]) box(along ? len : 0.07, 0.07, along ? 0.07 : len, 0xe9ecef, x, y, z);
+  for (let i = 0; i <= n; i++) { const o = -len / 2 + (i / n) * len; cyl(0.055, 0.055, 1.08, RAIL, along ? x + o : x, 0.54, along ? z + o : z, scene, 6); }
+}
+function wtree(x, z, s = 1) { // 잎이 조금 남은 겨울 은행나무
+  const g = grp(x, z); g.scale.setScalar(s); cyl(0.1, 0.17, 2.6, 0x7a5230, 0, 1.3, 0, g, 7);
+  [[0.9, 0.5, 0], [-0.8, 0.6, 0.4], [0.3, 0.7, -0.8], [-0.2, 0.9, 0.7]].forEach(([dx, k, dz], i) => { const b = cyl(0.03, 0.06, 1.7, 0x7a5230, dx * 0.45, 2.6 + k * 0.9, dz * 0.45, g, 5); b.rotation.z = -dx * 0.75; b.rotation.x = dz * 0.75; if (i < 3) ball(0.36, [0xe9b824, 0xd9a21b, 0xf0c94d][i], dx * 0.95, 3.1 + k * 1.2, dz * 0.95, g); });
+  return g;
+}
+rail(0.14, 16.9, 31.8, 27.75); rail(0.14, 6.2, 31.8, 42.9);
 block(35.2, 14.9, 46, 46);                                                 // 더 안쪽으로는 못 가요 (그 전에 '차도!' 로 끝나요)
 { const p = cyl(0.09, 0.09, 3.6, 0xffd43b, 31.9, 1.8, 40.3); const b = box(0.4, 1.0, 0.3, 0x222222, 31.9, 3.3, 40.3); ball(0.13, 0xe03131, 31.9, 3.55, 40.12); ball(0.13, 0x2f9e44, 31.9, 3.1, 40.12); }
 signPost('🚸 정문을 나와 왼쪽으로!\n길은 건너지 않아요', 28.5, 34.9, E, { fs: 40 });
@@ -1072,12 +1083,12 @@ BUS_X.forEach((x, i) => { const b = busModel(i + 1, BUS_COL[i]); b.position.set(
 block(12.2, 12.2, 17.4, 14.9); block(23.6, 12.2, 31.8, 14.9); block(-46, 12.2, -43.2, 14.9);
 { // 보도와 버스 사이 울타리: 버스 앞문 자리와 주차장 진출입로만 열려 있어요
   const gaps = BUS_X.map(x => [x + 2.0, x + 3.8]).concat([[17.5, 23.5]]).sort((a, b) => a[0] - b[0]);
-  let x0 = -46; for (const [a, b] of gaps) { if (a - x0 > 0.3) wall(a - x0, 1.0, 0.14, RAIL, (a + x0) / 2, 15.05); x0 = b; }
-  wall(31.8 - x0, 1.0, 0.14, RAIL, (31.8 + x0) / 2, 15.05);
+  let x0 = -46; for (const [a, b] of gaps) { if (a - x0 > 0.3) rail(a - x0, 0.14, (a + x0) / 2, 15.05); x0 = b; }
+  rail(31.8 - x0, 0.14, (31.8 + x0) / 2, 15.05);
 }
 { const p = cyl(0.1, 0.1, 4.4, 0xffd43b, 31.2, 2.2, 15.6); box(0.4, 1.1, 0.3, 0x222222, 31.2, 3.9, 15.6); ball(0.13, 0xe03131, 31.2, 4.2, 15.78); ball(0.13, 0x2f9e44, 31.2, 3.7, 15.78); }
 signPost('성산효대학원 앞\n버스 타는 곳 ⬅', 28.5, 18.9, N, { fs: 40 });
-for (const x of [-42, -30, -18, -6, 6, 26]) { cyl(0.16, 0.2, 2.6, 0x7a5230, x, 1.3, 18.9); for (const [dx, dy] of [[0.5, 0.5], [-0.5, 0.8], [0, 1.2]]) { const b = cyl(0.04, 0.07, 1.5, 0x7a5230, x + dx * 0.5, 2.9 + dy * 0.4, 18.9); b.rotation.z = -dx * 1.1; } } // 겨울 은행나무
+for (const x of [-42, -30, -18, -6, 6, 26]) wtree(x, 18.9); // 가로수
 
 // ---------- 성산효대학원대학교 (보도 남쪽) ----------
 const UNI = { x: -6, z: 28 };
@@ -1288,7 +1299,7 @@ const LWFX = { balloons: [], train: [], blades: null, swing: null, RX: 34, RZ: 1
   const g = new THREE.SphereGeometry(30, 24, 7, 0, Math.PI * 2, 0, Math.PI / 2);
   const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf1f6fa, wireframe: true, transparent: true, opacity: 0.55 }));
   const glass = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xbfe3f5, transparent: true, opacity: 0.09, side: THREE.BackSide, depthWrite: false }));
-  for (const m of [wire, glass]) { m.scale.set(1.53, 0.6, 0.63); m.position.set(0, 4.2, -27.8); m.userData.ns = 1; scene.add(m); }
+  for (const m of [wire, glass]) { m.scale.set(1.56, 0.4, 0.66); m.position.set(0, 13.2, -27.8); m.userData.ns = 1; scene.add(m); }
 }
 // 풍선비행: 돔 아래를 천천히 도는 열기구
 [[0xe03131, 0xffffff], [0x1c7ed6, 0xffd43b], [0x2f9e44, 0xffffff], [0xf06595, 0xffe066]].forEach(([c1, c2], i) => {
@@ -1301,7 +1312,7 @@ const LWFX = { balloons: [], train: [], blades: null, swing: null, RX: 34, RZ: 1
 });
 // 월드모노레일: 광장 위를 한 바퀴 도는 높은 선로와 열차
 { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.011, 6, 90), mat(0x4263eb)); r.rotation.x = Math.PI / 2; r.scale.set(LWFX.RX, LWFX.RZ, 16); r.position.set(0, 8.2, LWFX.cz); r.userData.ns = 1; scene.add(r);
-  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + 0.31, x = Math.cos(a) * LWFX.RX, z = LWFX.cz + Math.sin(a) * LWFX.RZ; if (clearAt(x, z, 0.6)) { cyl(0.22, 0.28, 8.1, 0xdfe3e6, x, 4.05, z, scene, 8); } }
+  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + 0.31, x = Math.cos(a) * LWFX.RX, z = LWFX.cz + Math.sin(a) * LWFX.RZ; if (clearAt(x, z, 0.6) && Math.hypot(x - CARO.x, z - CARO.z) > 9.5 && Math.hypot(x - 11, z + 15) > 6 && Math.hypot(x - RINKV.x, z - RINKV.z) > 14) { cyl(0.22, 0.28, 8.1, 0xdfe3e6, x, 4.05, z, scene, 8); block(x - 0.25, z - 0.25, x + 0.25, z + 0.25); } }
   [0xffffff, 0xe03131, 0xffffff].forEach((c, k) => { const car = new THREE.Group(); box(2.3, 1.0, 1.1, c, 0, 0.75, 0, car); box(2.1, 0.45, 1.14, 0x22313f, 0, 0.95, 0, car); car.traverse(o => { o.userData.ns = 1; }); scene.add(car); LWFX.train.push({ g: car, k }); }); }
 // 유럽풍 집 (광장 둘레)
 function euroHouse(x, z, w, h, wallC, roofC, ry) {
@@ -1332,7 +1343,85 @@ for (let k = 0; k < 7; k++) box(0.5, 0.5, 0.5, 0xf8f9fa, -37 + k, 4.85, -43.7);
 { const X = -41, Z = -39.6; for (const s of [-1, 1]) { const leg = cyl(0.16, 0.2, 8.2, 0x1c7ed6, X, 3.9, Z + s * 1.5); leg.rotation.x = s * 0.36; } box(0.5, 0.5, 3.4, 0x1c7ed6, X, 7.7, Z);
   const arm = new THREE.Group(); arm.position.set(X, 7.6, Z); cyl(0.12, 0.12, 5.4, 0xffd43b, 0, -2.7, 0, arm); const disc = cyl(1.5, 1.5, 0.35, 0xe03131, 0, -5.4, 0, arm, 18); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; box(0.3, 0.5, 0.3, 0x343a40, Math.cos(a) * 1.3, -5.05, Math.sin(a) * 1.3, arm); }
   scene.add(arm); LWFX.swing = arm; block(X - 0.5, Z - 1.9, X + 0.5, Z + 1.9); sign('자이로스윙\n키 130~190cm', 0.7, X + 0.8, 1.5, Z + 2.4, 0, { fs: 38, bg: '#1c7ed6', fg: '#ffffff' }); }
-sign2('롯데월드 어드벤처', 0.62, 11, 5.15, -9.5, 0, { fs: 54, bg: '#7a1f3d', fg: '#ffe066' });
+
+// ======================================================================= 디자인 손질 (겉면 그림 · 실내 2~3층 벽 · 통로 · 버스 · 운동장)
+function canvasTex(cw, ch, draw) { const c = document.createElement('canvas'); c.width = cw; c.height = ch; draw(c.getContext('2d'), cw, ch); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t; }
+// 유럽풍 2층 집이 이어진 겉면 (집 4채 = 12m)
+const euroTex = canvasTex(768, 512, (x, W, H) => {
+  const cols = ['#fbe9c6', '#f7d9d0', '#dcebf5', '#f3e2b3'], roofs = ['#b5432e', '#3b5bdb', '#2f7d4f', '#7a4a1e'];
+  for (let i = 0; i < 4; i++) {
+    const x0 = i * W / 4, hw = W / 4;
+    x.fillStyle = cols[i]; x.fillRect(x0, 0, hw, H);
+    x.fillStyle = roofs[i]; x.beginPath(); x.moveTo(x0, 70); x.lineTo(x0 + hw / 2, 6); x.lineTo(x0 + hw, 70); x.closePath(); x.fill(); x.fillRect(x0, 62, hw, 12);
+    x.strokeStyle = '#6b4a2f'; x.lineWidth = 7; x.strokeRect(x0 + 3, 74, hw - 6, H - 78); x.beginPath(); x.moveTo(x0, 292); x.lineTo(x0 + hw, 292); x.stroke();
+    for (const y of [124, 336]) for (const dx of [0.27, 0.73]) {
+      const cx = x0 + hw * dx, ww = 50, wh = 88;
+      x.fillStyle = '#5c4033'; x.fillRect(cx - ww / 2 - 5, y - 5, ww + 10, wh + 10); x.beginPath(); x.arc(cx, y, ww / 2 + 5, Math.PI, 0); x.fill();
+      const g = x.createLinearGradient(0, y - 20, 0, y + wh); g.addColorStop(0, '#fff3bf'); g.addColorStop(1, '#ffc94d'); x.fillStyle = g; x.fillRect(cx - ww / 2, y, ww, wh); x.beginPath(); x.arc(cx, y, ww / 2, Math.PI, 0); x.fill();
+      x.strokeStyle = '#5c4033'; x.lineWidth = 3; x.beginPath(); x.moveTo(cx, y - 24); x.lineTo(cx, y + wh); x.moveTo(cx - ww / 2, y + wh / 2); x.lineTo(cx + ww / 2, y + wh / 2); x.stroke();
+      x.fillStyle = '#2f7d4f'; x.fillRect(cx - ww / 2 - 8, y + wh + 6, ww + 16, 10); x.fillStyle = ['#e03131', '#f783ac', '#ffd43b'][(i + (y > 200 ? 1 : 0)) % 3]; for (let k = 0; k < 5; k++) { x.beginPath(); x.arc(cx - ww / 2 + k * (ww / 4), y + wh + 4, 6, 0, 7); x.fill(); }
+    }
+    x.strokeStyle = '#3b2a1a'; x.lineWidth = 4;
+    for (const y of [258, 472]) { x.beginPath(); x.moveTo(x0 + 8, y); x.lineTo(x0 + hw - 8, y); x.moveTo(x0 + 8, y + 26); x.lineTo(x0 + hw - 8, y + 26); x.stroke(); for (let k = 0; k <= 8; k++) { x.beginPath(); x.moveTo(x0 + 8 + k * (hw - 16) / 8, y); x.lineTo(x0 + 8 + k * (hw - 16) / 8, y + 26); x.stroke(); } }
+  }
+});
+// 길가 건물 겉면 (건물 3채 = 12m)
+const cityTex = canvasTex(768, 512, (x, W, H) => {
+  const cols = ['#d9cdbb', '#c9d1d9', '#e3d5c5'];
+  for (let i = 0; i < 3; i++) {
+    const x0 = i * W / 3, bw = W / 3;
+    x.fillStyle = cols[i]; x.fillRect(x0, 0, bw, H); x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(x0, 0, bw, 16); x.fillRect(x0 + bw - 5, 0, 5, H);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { const wx = x0 + 26 + c * 76, wy = 44 + r * 112; x.fillStyle = '#51606f'; x.fillRect(wx - 3, wy - 3, 62, 76); x.fillStyle = (r + c + i) % 4 === 0 ? '#ffe9a8' : '#a9c5dd'; x.fillRect(wx, wy, 56, 70); x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(wx, wy, 56, 22); x.fillStyle = '#51606f'; x.fillRect(wx + 26, wy, 3, 70); }
+  }
+});
+// 벽 위에 얹는 윗부분(상자). 큰 두 면에 겉면 그림. (위에서 보는 2.5D 에서는 가리면 사라져요)
+function upperWall(x1, z1, x2, z2, y0, y1, tex, tile) {
+  const along = Math.abs(x2 - x1) > Math.abs(z2 - z1), len = along ? Math.abs(x2 - x1) : Math.abs(z2 - z1), h = y1 - y0;
+  const t = tex.clone(); t.needsUpdate = true; t.repeat.set(len / tile, 1);
+  const face = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }), side = mat(0xe9dcc3);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(along ? len : 1, h, along ? 1 : len), along ? [side, side, side, side, face, face] : [face, face, side, side, side, side]);
+  m.position.set((x1 + x2) / 2, y0 + h / 2, (z1 + z2) / 2); m.userData.plain = 1; scene.add(m); return m;
+}
+// ----- 석정로 건너편: 높이가 다른 건물들 -----
+[[-46, -34, 9], [-34, -22, 11.5], [-22, -10, 8], [-10, 2, 12.5], [2, 14, 9.5], [14, 26, 11], [26, 38, 8.5], [38, 46, 10.5]].forEach(([a, b, h]) => upperWall(a, 4.8, b, 4.8, 4.5, h, cityTex, 12));
+// ----- 운동장 -----
+for (const z of [32.5, 33.3, 34.1]) slab(30, 0.1, 0xffffff, 9, z, 0.045);                       // 달리기 줄
+for (const [x, z] of [[-6.5, 32.6], [25.4, 32.9], [-27.6, 37], [-27.6, 41.6]]) wtree(x, z, 1.15);
+{ const X = -23, Z = 39.6; for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(0.05, 0.05, 2.2, 0xe03131, X + dx, 1.1, Z + dz, scene, 6);   // 정글짐
+  for (const y of [0.75, 1.45, 2.15]) { for (const dz of [-1, 1]) box(2, 0.06, 0.06, 0x1c7ed6, X, y, Z + dz); for (const dx of [-1, 1]) box(0.06, 0.06, 2, 0xffd43b, X + dx, y, Z); } block(X - 1.1, Z - 1.1, X + 1.1, Z + 1.1); }
+{ const X = -17.6, Z = 40; box(1.2, 0.1, 1.2, 0x2f9e44, X, 1.7, Z); for (const [dx, dz] of [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]]) cyl(0.05, 0.05, 1.7, 0x868e96, X + dx, 0.85, Z + dz, scene, 6);   // 미끄럼틀
+  const sl = box(0.9, 0.08, 3.2, 0xffd43b, X, 0.92, Z - 2.05); sl.rotation.x = -0.52; block(X - 0.7, Z - 3.6, X + 0.7, Z + 0.7); }
+for (const [x, c] of [[-10, 0xff8787], [-6, 0xffd43b], [6, 0x74c0fc], [10, 0xf783ac]]) { box(2.6, 0.45, 0.7, 0xb08968, x, 0.22, 42.9); for (let k = 0; k < 4; k++) ball(0.22, k % 2 ? 0x2f9e44 : c, x - 0.9 + k * 0.6, 0.6, 42.9); }   // 본관 앞 화단
+for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) box(2.2, 1.2, 0.08, 0x9fb7cf, UNI.x - 12.25 + i * 3.5, 3 + j * 2.6, 31.24); // 대학원 뒷면 창
+for (const [x, z] of [[29.9, 45], [30, 24]]) prop(lampPost2, x, z);
+// ----- 달리는 버스: 창·천장 뼈대·선반, 길가 방음벽 -----
+for (let x = -7.5; x <= 7.5; x += 3) for (const z of [BUSIN.z1, BUSIN.z2]) { if (z === BUSIN.z2 && x > 5) continue; const g = new THREE.Mesh(new THREE.BoxGeometry(2.86, 1.4, 0.04), new THREE.MeshStandardMaterial({ color: 0xbfe3f5, transparent: true, opacity: 0.2, depthWrite: false })); g.position.set(x, 1.75, z); g.userData.ns = 1; scene.add(g); }
+for (let x = -9; x <= 9; x += 3) box(0.08, 0.08, 4.0, 0xadb5bd, x, 2.5, BUSIN.zc);
+for (const z of [BUSIN.z1 + 0.32, BUSIN.z2 - 0.32]) box(17.6, 0.06, 0.5, 0xdee2e6, 0, 2.25, z);
+{ const l = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 0.3), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3bf, emissiveIntensity: 0.9 })); l.position.set(-0.5, 2.5, BUSIN.zc); l.userData.ns = 1; scene.add(l); }
+for (const z of [-2.12, 4.52]) { box(92, 2.0, 0.1, 0x8fa3ad, 0, 1.0, z); const p = new THREE.Mesh(new THREE.BoxGeometry(92, 1.5, 0.06), new THREE.MeshStandardMaterial({ color: 0xcfe8f5, transparent: true, opacity: 0.55 })); p.position.set(0, 2.75, z); scene.add(p); box(92, 0.12, 0.14, 0xffffff, 0, 3.55, z); }
+// ----- 롯데월드 지하 1층 통로: 천장·조명·가게·안내판 -----
+for (const cx of [-14, 10, 34]) { const c = box(24, 0.25, 6.7, 0xf8f0e3, cx, 4.75, -6.1); c.userData.ns = 1; }
+for (let x = -23; x <= 43; x += 6) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.5), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3bf, emissiveIntensity: 1 })); l.position.set(x, 4.6, -6.1); l.userData.ns = 1; scene.add(l); }
+[[-16, '🎁 기념품 가게', 0xe8590c], [-2.4, '☕ 카페', 0x2f9e44], [11.6, '📷 사진관', 0x5f3dc4], [17.4, '🧸 캐릭터 숍', 0xd6336c]].forEach(([x, name, c]) => {
+  box(5, 0.24, 0.9, c, x, 3.05, -3.05); for (let k = 0; k < 5; k++) box(0.5, 0.26, 0.92, 0xffffff, x - 2 + k, 3.05, -3.05);
+  const g = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.3, 0.08), new THREE.MeshStandardMaterial({ color: 0xd0ebff, emissive: 0xfff3bf, emissiveIntensity: 0.35 })); g.position.set(x, 1.3, -2.66); scene.add(g);
+  box(4.6, 0.3, 0.12, 0x5c4033, x, 0.15, -2.68); for (const dx of [-2.25, 0, 2.25]) box(0.12, 2.6, 0.12, 0x5c4033, x + dx, 1.3, -2.68);
+  sign(name, 0.44, x, 3.62, -2.7, N, { fs: 44, bg: '#ffffff', fg: '#333333' });
+});
+sign('⬆ 단체 매표소 · 정문 게이트', 0.5, -17.6, 4.05, -6.1, W, { fs: 46, bg: '#1c3fa8', fg: '#ffffff' });
+sign('⬆ 버스 타는 곳 (주차장)', 0.5, 4.6, 4.05, -6.1, E, { fs: 46, bg: '#1c3fa8', fg: '#ffffff' });
+for (const x of [-12, 0.5, 18]) bunting(x, -9.2, x, -3.0, 4.2, [0xe03131, 0xffffff, 0x2f9e44]);
+for (const [x, t, c] of [[-13, '🎠 회전목마', '#4263eb'], [-6.2, '🗼 자이로드롭', '#e03131'], [3.6, '🚣 후룸라이드', '#1971c2'], [17.6, '✈ 플라이벤처', '#5f3dc4']]) sign(t, 0.5, x, 2.3, -9.33, 0, { fs: 44, bg: c, fg: '#ffffff', border: '#ffffff' });
+// ----- 1층 광장: 2~3층 벽(유럽풍 집) · 지붕 띠 · 모서리 탑 -----
+[[-46, -9.6, -19, -9.6], [-19, -9.6, 8, -9.6], [14, -9.6, 46, -9.6], [45.6, -46, 45.6, -9.6], [-20, -45.6, 2, -45.6], [2, -45.6, 24, -45.6], [24, -45.6, 46, -45.6], [-45.6, -32.6, -45.6, -9.6]].forEach(([x1, z1, x2, z2]) => {
+  upperWall(x1, z1, x2, z2, 4.05, 13, euroTex, 12);
+  const along = Math.abs(x2 - x1) > 1, len = along ? Math.abs(x2 - x1) : Math.abs(z2 - z1), cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
+  const r = box(along ? len : 1.7, 0.5, along ? 1.7 : len, 0x8d4b2e, cx, 13.25, cz); r.userData.ns = 1;
+});
+upperWall(8, -9.6, 14, -9.6, 5.2, 13, euroTex, 12); box(6, 0.5, 1.7, 0x8d4b2e, 11, 13.25, -9.6);
+sign('롯데월드 어드벤처', 0.7, 11, 5.9, -9.04, 0, { fs: 56, bg: '#7a1f3d', fg: '#ffe066' }); sign('나가는 곳 · 정문 게이트', 0.6, 11, 5.9, -10.16, N, { fs: 50, bg: '#7a1f3d', fg: '#ffe066' });
+for (const [x, z] of [[45.2, -45.2], [45.2, -10], [-45.2, -10]]) { cyl(1.3, 1.3, 15.5, 0xf8f0e3, x, 7.75, z, scene, 12); const c = new THREE.Mesh(new THREE.ConeGeometry(1.7, 3.2, 12), mat(0x364fc7)); c.position.set(x, 17.1, z); scene.add(c); }
 
 let decor = [];
 function addDecor(o) { scene.add(o); decor.push(o); return o; }
@@ -1403,7 +1492,7 @@ function worldTick(dt, t) {
   FLUME.boat.position.x = FLUME.x + Math.sin(t * 0.7) * 5; FLUME.boat.rotation.y = Math.cos(t * 0.7) > 0 ? 0 : Math.PI;
   skaters.forEach((p, i) => { const a = t * 0.5 + i * 2.1, r = 0.55 + i * 0.12; p.position.x = RINKV.x + Math.cos(a) * RINKV.rx * r; p.position.z = RINKV.z + Math.sin(a) * RINKV.rz * r; p.rotation.y = -a; });
   // 풍선비행·모노레일·풍차·자이로스윙
-  LWFX.balloons.forEach((b, i) => { const a = b.a + t * 0.05, bob = Math.sin(t * 0.6 + i * 1.7) * 0.5; b.g.position.set(Math.cos(a) * 23, 11.5 + bob + (i % 2) * 1.6, -27.6 + Math.sin(a) * 8.5); b.g.rotation.y = -a; });
+  LWFX.balloons.forEach((b, i) => { const a = b.a + t * 0.05, bob = Math.sin(t * 0.6 + i * 1.7) * 0.5; b.g.position.set(Math.cos(a) * 23, 16.2 + bob + (i % 2) * 1.8, -27.6 + Math.sin(a) * 8.5); b.g.rotation.y = -a; });
   LWFX.train.forEach(c => { const a = t * 0.11 - c.k * 0.075; c.g.position.set(Math.cos(a) * LWFX.RX, 8.3, LWFX.cz + Math.sin(a) * LWFX.RZ); c.g.rotation.y = -Math.atan2(Math.cos(a) * LWFX.RZ, -Math.sin(a) * LWFX.RX); });
   if (LWFX.blades) LWFX.blades.rotation.x = t * 0.5;
   if (LWFX.swing) LWFX.swing.rotation.x = Math.sin(t * 0.9) * 0.85;
