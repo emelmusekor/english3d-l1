@@ -158,7 +158,7 @@ const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 // 그래픽 품질: high(그림자·고해상도) / low(가볍게). G 키로 바꿀 수 있고, 느리면 자동으로 low.
 const GFX = { high: true, auto: true };
-try { const q = new URLSearchParams(location.search).get('gfx') || localStorage.getItem('english3d_gfx'); if (q) { GFX.high = q === 'high'; GFX.auto = false; } } catch (e) {}
+try { const q = new URLSearchParams(location.search).get('gfx') || localStorage.getItem('english3d_gfx'); if (q) { GFX.high = q === 'high'; GFX.auto = false; GFX.wantLite = q === 'lite'; GFX.fixed = !!new URLSearchParams(location.search).get('gfx'); } } catch (e) {}
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1));
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = GFX.high; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -269,8 +269,16 @@ function polish(root) {
     o.castShadow = !flat && !ms[0].transparent && !(p.radius > 20) && !o.userData.ns;
   });
 }
+// 아주 가볍게: 화면 해상도를 낮추고(픽셀 0.7배), 먼 곳은 안개로 가려 덜 그려요 (느린 크롬북용)
+function setLite(on, why) {
+  GFX.lite = on;
+  renderer.setPixelRatio(on ? 0.7 : Math.min(window.devicePixelRatio || 1, GFX.high ? 1.5 : 1)); resize();
+  scene.fog.near = on ? 26 : 55; scene.fog.far = on ? 80 : 160; camera.far = on ? 90 : 420; camera.updateProjectionMatrix();
+  sky.scale.setScalar(on ? 0.22 : 1); sunDisk.scale.set(on ? 16 : 60, on ? 16 : 60, 1); clouds.visible = !on; // 하늘 공도 보이는 거리 안으로
+  if (why) try { toast(on ? '🎨 그래픽: 아주 가볍게 (G 키로 바꾸기)' : '🎨 그래픽: 선명하게 (G 키로 바꾸기)'); } catch (e) {}
+}
 function setQuality(high, why) {
-  GFX.high = high;
+  GFX.high = high; if (high && GFX.lite) setLite(false);
   renderer.shadowMap.enabled = high; sun.castShadow = high;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 1.5 : 1)); resize();
   scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
@@ -278,8 +286,9 @@ function setQuality(high, why) {
 }
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyG' || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT'))) return;
-  GFX.auto = false; setQuality(!GFX.high, true);
-  try { localStorage.setItem('english3d_gfx', GFX.high ? 'high' : 'low'); } catch (er) {}
+  GFX.auto = false;
+  if (GFX.high) setQuality(false, true); else if (!GFX.lite) setLite(true, true); else setQuality(true, true); // 선명하게 → 가볍게 → 아주 가볍게 → 선명하게
+  try { localStorage.setItem('english3d_gfx', GFX.lite ? 'lite' : GFX.high ? 'high' : 'low'); } catch (er) {}
 });
 const fogBase = new THREE.Color(), skyTop = new THREE.Color(0x3f86d8), hsl = {};
 const perf = { t0: 0, frames: 0, done: false };
@@ -289,16 +298,22 @@ function gfxTick(dt, now) {
   fogBase.copy(scene.fog.color); fogBase.getHSL(hsl);
   skyMat.uniforms.bottom.value.copy(fogBase);
   skyMat.uniforms.top.value.copy(fogBase).lerp(skyTop, hsl.s > 0.3 ? 0.55 : 0.15);
-  sunDisk.position.copy(camera.position).addScaledVector(SUN_DIR, 300);
+  sunDisk.position.copy(camera.position).addScaledVector(SUN_DIR, GFX.lite ? 80 : 300);
   sunDisk.visible = hsl.l > 0.6 && hsl.s > 0.3;
   clouds.rotation.y += dt * 0.004;
   sun.position.set(P.x + SUN_DIR.x * 60, SUN_DIR.y * 60, P.z + SUN_DIR.z * 60); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
   if ((polishT += dt) > 0.7) { polishT = 0; polish(scene); }
-  if (started && GFX.auto && !perf.done) {
+  if (started && !perf.done && !GFX.fixed) { // 처음 몇 초 동안 재서 느리면 한 단계씩 가볍게 (선명하게 → 가볍게 → 아주 가볍게)
     if (!perf.t0) perf.t0 = now;
     perf.frames++;
-    if (now - perf.t0 > 5000) { perf.done = true; const fps = perf.frames * 1000 / (now - perf.t0); if (fps < 28 && GFX.high) setQuality(false, true); }
+    if (now - perf.t0 > 5000) {
+      const fps = perf.frames * 1000 / (now - perf.t0); perf.t0 = 0; perf.frames = 0;
+      if (fps < 28 && GFX.high && GFX.auto) setQuality(false, true);
+      else if (fps < 24 && !GFX.high && !GFX.lite && (GFX.auto || !GFX.wantLite)) { setLite(true, true); perf.done = true; }
+      else perf.done = true;
+    }
   }
+  if (GFX.wantLite && !GFX.lite && started) { GFX.wantLite = false; setLite(true); }
   animatePeople(now / 1000, dt);
   fx2Tick(dt, now / 1000);
 }
@@ -401,7 +416,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.9'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.0'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -518,62 +533,77 @@ function decorate() {
 }
 
 // ---------- 움직이지 않는 물체 합치기: 같은 색(재질)의 상자·기둥·공을 16m 구역마다 하나로 합쳐 그리기 횟수를 줄여요 ----------
-//  · 대상: 장면에 바로 붙은 Mesh, 무늬 없는 불투명 재질, 바닥이 1m 아래(지붕·천장처럼 2.5D 에서 숨겨야 하는 것은 빼요)
-//  · 그 뒤에 그 물체를 옮기거나 숨기면 반영되지 않아요 → 개발용 ?mergecheck 로 찾아서 userData.keep = 1 로 빼요
-const MERGE = { done: false, list: [], recs: [], groups: 0, before: 0, reverted: 0 };
+//  · 대상: 무늬 없는 불투명 재질의 Mesh. 높고 넓은 것(지붕·천장)은 2.5D 에서 숨기니까 빼요
+//  · 2초 동안 지켜보고 그새 움직이거나 숨겨진 것은 빼요. 합친 원본은 장면에서 떼어 둬서(매 프레임 계산에서 빠져요) 가벼워요
+//  · 합친 뒤 누가 원본을 옮기거나·숨기거나·다시 붙이거나·지우면 그 묶음을 원래대로 되돌려요 (mergeGuard)
+//  · 두 번 해요: 처음(세계) + 8초 뒤(놀이 층·미션 소품까지). ?nomerge 로 끄기, ?mergecheck 로 되돌린 것 보기
+const MERGE = { passes: 0, recs: [], groups: 0, before: 0, reverted: 0, log: [], hooked: false };
+function mergeVisibleFrom(o) { for (let a = o; a; a = a.parent) { if (!a.visible) return false; if (a === scene) return true; } return false; }
+function mergeRevert(r) {
+  const i = MERGE.recs.indexOf(r); if (i < 0) return; MERGE.recs.splice(i, 1);
+  scene.remove(r.mm); r.mm.geometry.dispose();
+  for (const it of r.items) { const o = it.o; o.userData.keep = 1; o.userData.mergedRec = null; if (!o.parent && !it.gone && it.parent) it.parent.add(o); }
+  MERGE.reverted++;
+  try { const o = r.items[0].o, e = o.matrixWorld.elements; MERGE.log.push(r.items.length + 'x' + o.geometry.type.replace('Geometry', '') + '@' + e[12].toFixed(0) + ',' + e[14].toFixed(0) + '#' + o.material.color.getHexString()); } catch (er) {}
+}
 function mergeGuard() {
   for (let i = MERGE.recs.length - 1; i >= 0; i--) {
     const r = MERGE.recs[i]; let bad = false;
-    for (const it of r.items) { const o = it.o; if (o.visible || !mergeVisibleFrom(o) || !o.matrixWorld.equals(it.m)) { bad = true; break; } }
-    if (!bad) continue;
-    scene.remove(r.mm); r.mm.geometry.dispose();
-    try { const o = r.items[0].o, e = o.matrixWorld.elements; (MERGE.log = MERGE.log || []).push(r.items.length + 'x' + o.geometry.type.replace('Geometry', '') + '@' + e[12].toFixed(0) + ',' + e[14].toFixed(0) + '#' + o.material.color.getHexString()); } catch (er) {}
-    for (const it of r.items) { const o = it.o; o.userData.keep = 1; o.userData.mergedInto = null; if (!o.visible) o.visible = true; }
-    MERGE.recs.splice(i, 1); MERGE.reverted++;
+    for (const it of r.items) {
+      const o = it.o, p = it.parent;
+      if (o.parent || it.gone || !o.visible || !o.position.equals(it.pos) || !o.quaternion.equals(it.quat) || !o.scale.equals(it.scl)) { bad = true; break; }
+      if (p !== scene && (!mergeVisibleFrom(p) || !p.matrixWorld.equals(it.pmw))) { bad = true; break; }
+    }
+    if (bad) mergeRevert(r);
   }
 }
-function mergeVisibleFrom(o) { for (let a = o.parent; a; a = a.parent) { if (!a.visible) return false; if (a === scene) return true; } return false; } // 위쪽(부모들)이 아직 장면에 보이게 붙어 있나
+function mergeHook() { // 떼어 둔 원본을 누가 지우거나(remove) 붙이면(add) 바로 알아채요
+  if (MERGE.hooked) return; MERGE.hooked = true;
+  const rm = THREE.Object3D.prototype.remove, add = THREE.Object3D.prototype.add;
+  THREE.Object3D.prototype.remove = function (...objs) { for (const o of objs) { const r = o && o.userData && o.userData.mergedRec; if (r) { const it = r.items.find(x => x.o === o); if (it) it.gone = true; mergeRevert(r); } } return rm.apply(this, objs); };
+  THREE.Object3D.prototype.add = function (...objs) { const res = add.apply(this, objs); for (const o of objs) { const r = o && o.userData && o.userData.mergedRec; if (r) mergeRevert(r); } return res; };
+}
 function mergeStatic() {
-  if (MERGE.done) return; MERGE.done = true;
   let qs0; try { qs0 = new URLSearchParams(location.search); } catch (e) { return; }
-  if (qs0.has('nomerge')) return;
+  if (qs0.has('nomerge') || MERGE.passes >= 2) return;
+  const pass = ++MERGE.passes;
   try { polish(scene); } catch (e) {}
   scene.updateMatrixWorld(true);
   const skip = new Set([sky, clouds, camera]);
   try { if (typeof decor !== 'undefined' && Array.isArray(decor)) decor.forEach(o => skip.add(o)); } catch (e) {}
   try { items.forEach(i => skip.add(i.mesh)); } catch (e) {}
   try { Object.values(NPC).forEach(n => skip.add(n.g)); } catch (e) {}
+  try { if (CAM.me) skip.add(CAM.me); } catch (e) {}
   const CELL = 16, cand = [], b3 = new THREE.Box3();
-  const ok = (o) => { // 이 물체를 합쳐도 되나
+  const ok = (o) => {
     if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible) return false;
-    const u = o.userData; if (u.anim || u.keep || u.grass || u.merged || u.dyn || u.play) return false;
+    const u = o.userData; if (u.anim || u.keep || u.grass || u.merged || u.dyn || u.mergedRec) return false;
     const m = o.material; if (!m || Array.isArray(m) || m.transparent || m.map || m.alphaMap || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial)) return false;
     const g = o.geometry; if (!g || !g.attributes.position || !g.attributes.normal || g.morphAttributes.position || g.attributes.position.count > 4000) return false;
     if (g.type === 'PlaneGeometry' && (g.parameters.width * g.parameters.height) >= 300) return false;
     return true;
   };
-  const visit = (o) => { // 위에서부터 내려가요. 움직이는 묶음·사람·물건은 통째로 건너뛰어요
+  const visit = (o) => {
     if (skip.has(o) || !o.visible || o.isLight || o.isSprite || o.isPoints || o.isInstancedMesh) return;
-    const u = o.userData; if (u.anim || u.keep || u.dyn || u.play || u.tag || u.merged) return;
-    if (o.isMesh) {
-      if (!ok(o)) return;
-      b3.setFromObject(o); if (b3.isEmpty()) return;
-      if (b3.min.y >= 1.0 && b3.max.x - b3.min.x >= 0.9 && b3.max.z - b3.min.z >= 0.9) return; // 지붕·천장처럼 높고 넓은 것은 2.5D 에서 숨기니까 빼요 (창문 같은 얇은 것은 합쳐요)
-      const cx = Math.floor((b3.min.x + b3.max.x) / 2 / CELL), cz = Math.floor((b3.min.z + b3.max.z) / 2 / CELL);
-      cand.push({ o, key: o.material.uuid + '|' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '|' + cx + ',' + cz, m0: o.matrixWorld.clone() });
+    const u = o.userData; if (u.anim || u.keep || u.dyn || u.tag || u.merged) return;
+    if (o.isMesh && ok(o)) {
+      b3.setFromObject(o);
+      if (!b3.isEmpty() && !(b3.min.y >= 1.0 && b3.max.x - b3.min.x >= 0.9 && b3.max.z - b3.min.z >= 0.9)) {
+        const cx = Math.floor((b3.min.x + b3.max.x) / 2 / CELL), cz = Math.floor((b3.min.z + b3.max.z) / 2 / CELL);
+        cand.push({ o, key: o.material.uuid + '|' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '|' + cx + ',' + cz, m0: o.matrixWorld.clone() });
+      }
     }
     for (const c of o.children) visit(c);
   };
   for (const c of scene.children) visit(c);
-  // 2초 동안 지켜봐요: 그새 움직이거나 숨겨진 것(돌아가는 놀이기구, 지나가는 차, 흔들리는 풍선 등)은 빼고 합쳐요
   setTimeout(() => { try { mergeBuild(cand, qs0); } catch (e) { console.warn(e); } }, 2000);
+  if (pass === 1) setTimeout(() => { try { mergeStatic(); } catch (e) { console.warn(e); } }, 8000); // 놀이 층·미션 소품이 놓인 뒤 한 번 더
 }
-function mergeVisible(o) { for (let a = o; a; a = a.parent) { if (!a.visible) return false; if (a === scene) return true; } return false; }
 function mergeBuild(cand, qs0) {
   scene.updateMatrixWorld(true);
   const groups = new Map();
   for (const c of cand) {
-    const o = c.o; if (o.userData.keep || !mergeVisible(o) || !o.matrixWorld.equals(c.m0)) continue;
+    const o = c.o; if (o.userData.keep || o.userData.mergedRec || !mergeVisibleFrom(o) || !o.matrixWorld.equals(c.m0)) continue;
     let gr = groups.get(c.key); if (!gr) groups.set(c.key, gr = []); gr.push(o);
   }
   for (const gr of groups.values()) {
@@ -598,14 +628,18 @@ function mergeBuild(cand, qs0) {
     const mm = new THREE.Mesh(geo, gr[0].material); mm.castShadow = gr[0].castShadow; mm.receiveShadow = gr[0].receiveShadow;
     mm.userData.merged = gr.length; mm.userData.pol = 1; mm.matrixAutoUpdate = false; mm.updateMatrix();
     scene.add(mm);
-    // 원래 물체는 숨겨 둬요(카메라 가림 계산·다른 코드의 참조는 그대로 써요)
-    const rec = { mm, items: gr.map(o => ({ o, m: o.matrixWorld.clone() })) };
-    for (const o of gr) { o.visible = false; o.userData.mergedInto = mm; MERGE.list.push({ o, m: o.matrixWorld.clone() }); }
-    MERGE.recs.push(rec);
-    MERGE.groups++; MERGE.before += gr.length;
+    const rec = { mm, items: [] };
+    for (const o of gr) {
+      const p = o.parent;
+      rec.items.push({ o, parent: p, pos: o.position.clone(), quat: o.quaternion.clone(), scl: o.scale.clone(), pmw: p.matrixWorld.clone(), gone: false });
+      p.children.splice(p.children.indexOf(o), 1); o.parent = null; // 장면에서 떼어 둬요 (remove 를 쓰지 않는 것은 아래 갈고리가 알아채지 않게)
+      o.userData.mergedRec = rec;
+    }
+    MERGE.recs.push(rec); MERGE.groups++; MERGE.before += gr.length;
   }
+  mergeHook();
   if (!MERGE.timer) MERGE.timer = setInterval(() => { try { mergeGuard(); } catch (e) {} }, 500);
-  if (qs0.has('mergecheck')) setInterval(() => { if (MERGE.log && MERGE.log.length) document.documentElement.dataset.mergebad = MERGE.reverted + ' ' + MERGE.log.slice(0, 30).join(' ; '); }, 1000);
+  if (qs0.has('mergecheck') && !MERGE.chk) MERGE.chk = setInterval(() => { if (MERGE.log.length) document.documentElement.dataset.mergebad = MERGE.reverted + ' ' + MERGE.log.slice(0, 30).join(' ; '); }, 1000);
 }
 function fx2Tick(dt, t) {
   if (!FX2.ready) { FX2.ready = true; try { detailWorld(); } catch (e) { console.warn(e); } try { decorate(); } catch (e) { console.warn(e); } initUI2(); try { mergeStatic(); } catch (e) { console.warn(e); } }
@@ -1907,7 +1941,7 @@ function stage4() {
   NPC.teacher.talk = async () => {
     mark('teacher', false); NPC.teacher.talk = null;
     await say('Ms. Lee', "Let's make sentences with word blocks!", '단어 블록으로 문장을 만들어 봐요!');
-    await say('', '', '길 가운데에 단어 블록이 떠 있어요. 문장 순서대로 블록에 부딪혀서 모으세요. 대문자로 시작하는 단어가 첫 단어예요!', { btn: '시작!' });
+    await say('', '', '광장 가운데에 단어 블록이 떠 있어요. 문장 순서대로 블록에 부딪혀서 모으세요. 대문자로 시작하는 단어가 첫 단어예요!', { btn: '시작!' });
     closeDlg(); stageState.si = 0; spawnSentence();
   };
 }
@@ -2483,7 +2517,7 @@ function begin(reset) {
   track('start', { stage: S.stage });
   setInterval(() => track('state', { stage: S.stage, stars: S.stars, correct: S.correct, tries: S.tries, best: S.best }), 30000);
   NPC.bonus.talk = bethTalk;
-  if (S.stage === 0) showBanner(STAGES[0].title, '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
+  if (S.stage === 0) showBanner(STAGES[0].title, isTouch ? '왼쪽 화면을 밀어 걷기 · 오른쪽 화면을 밀어 둘러보기 · 말 걸기 단추' : '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
   if (S.stage >= STAGES.length - 1) showEnd();
   coachStart();
   if (!isTouch && !coach.el) setTimeout(() => toast('화면을 한 번 클릭하면 마우스로 둘러볼 수 있어요 (Esc로 해제)', 3500), 3200);
