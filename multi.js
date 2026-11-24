@@ -8,6 +8,7 @@
   'use strict';
   var G = window.__mp;
   if (!G || window.MULTI) return;
+  if (G.L && G.L.noMulti) return; // 단원이 함께 하기를 끈 경우 (롯데월드 안전교육)
   var qs; try { qs = new URLSearchParams(location.search); } catch (e) { return; }
   var cfg = window.NET_CONFIG || {};
   var isDev = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';

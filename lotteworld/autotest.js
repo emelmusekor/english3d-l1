@@ -49,7 +49,7 @@
     }
     if (G.S.stage === 4) {
       await tag('foodNo'); await wait(300); await tag('foodOk'); await tag('wash'); await talk('clerk', 0, -1);
-      await talk('cast_plaza'); await at(16.6, -17.8); await at(-21.2, -22.2); await tag('lift'); await wait(300); await tag('exit');
+      await talk('cast_plaza'); await at(15.8, -16.6); await at(-21.2, -22.2); await tag('lift'); await wait(300); await tag('exit');
       await want(5); log('s5 ok');
     }
     if (G.S.stage === 5) {
