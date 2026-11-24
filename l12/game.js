@@ -400,7 +400,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.4'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.5'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -2352,11 +2352,11 @@ showEnd = function () { const was = $('#end').classList.contains('show'); _showE
   try {
     let total = 0, done = 0;
     document.querySelectorAll('.lessonPick a').forEach(a => {
-      const m = /^L(\d+)$/.exec(a.textContent.trim()); if (!m) return;
+      const m = /^L(\d+)$/.exec(a.dataset.l || a.textContent.trim()); if (!m) return; const extra = !!a.dataset.l; /* data-l: 영어 단원이 아닌 곁들이 단원(롯데월드 안전) */
       let s = null; try { s = JSON.parse(localStorage.getItem('english3d_l' + m[1] + '_v1')); } catch (e) {}
       if (!s) return;
-      total += s.stars || 0;
-      if (s.stage >= 6) { done++; a.classList.add('done'); a.textContent += ' ✓'; a.title = '끝낸 단원 · 별 ' + (s.stars || 0) + '개'; }
+      if (!extra) total += s.stars || 0;
+      if (s.stage >= 6) { if (!extra) done++; a.classList.add('done'); a.textContent += ' ✓'; a.title = '끝낸 단원 · 별 ' + (s.stars || 0) + '개'; }
       else if (s.stage > 0 || s.stars > 0) { a.classList.add('ing'); a.title = '미션 ' + (s.stage + 1) + '/6 하는 중 · 별 ' + (s.stars || 0) + '개'; const b = document.createElement('i'); b.style.width = Math.max(12, s.stage / 6 * 100) + '%'; a.appendChild(b); }
     });
     const pick = document.querySelector('.lessonPick');
@@ -2398,7 +2398,7 @@ function portalGo() {
   setTimeout(() => { location.href = lessonUrl(PORTAL.next); }, 850);
 }
 FX2.tickers.push((dt, t) => {
-  let fin = false; try { fin = started && S.stage >= STAGES.length - 1; } catch (e) {}
+  let fin = false; try { fin = started && !L.noPortal && S.stage >= STAGES.length - 1; } catch (e) {}
   if (fin && !PORTAL.g) portalMake();
   if (!PORTAL.g) return;
   PORTAL.g.visible = fin; if (!fin || PORTAL.going) return;
@@ -2414,7 +2414,7 @@ FX2.tickers.push((dt, t) => {
   else PORTAL.hold = 0;
 });
 // 끝 화면에도 바로 가는 단추를 달아요
-try { const ec = document.querySelector('#end #endClose'); if (ec) { const b = document.createElement('button'); b.className = 'big'; b.id = 'endNext'; b.textContent = '🌀 ' + (PORTAL.next === 1 ? '처음 단원' : '다음 단원') + ' Lesson ' + PORTAL.next + ' 로 가기'; b.onclick = portalGo; ec.classList.add('alt'); ec.parentElement.insertBefore(b, ec); } } catch (e) {}
+try { const ec = document.querySelector('#end #endClose'); if (ec && !L.noPortal) { const b = document.createElement('button'); b.className = 'big'; b.id = 'endNext'; b.textContent = '🌀 ' + (PORTAL.next === 1 ? '처음 단원' : '다음 단원') + ' Lesson ' + PORTAL.next + ' 로 가기'; b.onclick = portalGo; ec.classList.add('alt'); ec.parentElement.insertBefore(b, ec); } } catch (e) {}
 // ---------- 글쓰기 미션: 어떤 이름을 넣어도 제출은 되게 해요 ----------
 // 전에는 영어 글자만 받아서 siW00 처럼 숫자가 섞이거나 한글로 쓰면 '완성!'이 눌리지 않았어요.
 // 이제 글자·숫자(한글 포함)는 그대로 받고, 화면을 깨뜨릴 수 있는 기호만 지워요. 비어 있으면 Student 로 채워요.
@@ -2478,6 +2478,15 @@ window.__game = { camera, CAM, say, ask, tick: (dt) => update(dt, performance.no
 if (qs.has('autotest')) { const s = document.createElement('script'); s.src = 'autotest.js'; document.body.appendChild(s); }
 // 함께 하기(multi.js): 반에 참여한 학생끼리 같은 공간에서 만나요. net.js 와 같은 폴더에서 불러와요.
 window.__mp = { scene, makePerson, textSprite, P, L, speak, toast, addStar, confetti, beep, isTouch, prompt: ui.prompt,
+  shot() { // 같이 사진 찍기: 내 캐릭터 앞쪽에서 얼굴이 보이게 한 장 찍고, 카메라는 바로 되돌려요
+    try {
+      const p0 = camera.position.clone(), q0 = camera.quaternion.clone(), f0 = camera.fov;
+      if (CAM.third) { camera.position.set(P.x - Math.sin(P.yaw) * 4.6, 2.0, P.z - Math.cos(P.yaw) * 4.6); camera.lookAt(P.x, 1.2, P.z); camera.fov = 60; camera.updateProjectionMatrix(); camera.updateMatrixWorld(); }
+      renderer.render(scene, camera); const u = renderer.domElement.toDataURL('image/jpeg', 0.86);
+      camera.position.copy(p0); camera.quaternion.copy(q0); camera.fov = f0; camera.updateProjectionMatrix();
+      return u;
+    } catch (e) { return null; }
+  },
   get S() { return S; }, get started() { return started; }, get dlgOpen() { return dlgOpen; }, get busy() { return busy; }, get nearNPC() { return nearNPC; },
   lock(on) { dlgOpen = !!on; if (on) { if (document.pointerLockElement) document.exitPointerLock(); for (const k in keys) keys[k] = false; } } };
 try { const n = document.querySelector('script[src$="net.js"]'); if (n) { const s = document.createElement('script'); s.src = n.getAttribute('src').replace(/net\.js$/, 'multi.js'); document.body.appendChild(s); } } catch (e) {}

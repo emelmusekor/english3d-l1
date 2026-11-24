@@ -228,7 +228,7 @@
   }
   function collect() {
     var b = { v: 1, L: {} };
-    for (var n = 1; n <= 12; n++) { var s = lsGet('english3d_l' + n + '_v1'); if (s && typeof s === 'object') { s = cleanLesson(s); if (s) b.L[n] = s; } }
+    for (var n = 1; n <= 13; n++) { var s = lsGet('english3d_l' + n + '_v1'); if (s && typeof s === 'object') { s = cleanLesson(s); if (s) b.L[n] = s; } }
     var f = lsGet('english3d_fun_v1'); if (f && typeof f === 'object') b.fun = deepClean(f, 0);
     var d = int(lsRaw('english3d_deco')); if (d >= 1 && d <= 9) b.deco = d;
     var a = lsRaw('english3d_avatar'); if (a && /^[A-Za-z]{2,12}$/.test(a)) b.avatar = a;
@@ -255,7 +255,7 @@
   function mergeBlob(a, b) {
     a = a || { L: {} }; b = b || { L: {} };
     var out = { v: 1, L: {} };
-    for (var n = 1; n <= 12; n++) { var m = mergeLesson((a.L || {})[n], (b.L || {})[n]); if (m) out.L[n] = m; }
+    for (var n = 1; n <= 13; n++) { var m = mergeLesson((a.L || {})[n], (b.L || {})[n]); if (m) out.L[n] = m; }
     var fa = a.fun && typeof a.fun === 'object' ? a.fun : null, fb = b.fun && typeof b.fun === 'object' ? b.fun : null;
     if (fa || fb) {
       var f = deepClean(fa || fb, 0), g = fa && fb ? fb : null;
@@ -273,7 +273,7 @@
   }
   function sigOf(b) { try { return JSON.stringify([b.L, b.fun ? [b.fun.gems, b.fun.badges, b.fun.decoMax] : 0, b.deco || 0, b.avatar || '']); } catch (e) { return ''; } }
   function applyBlob(b) {
-    for (var n = 1; n <= 12; n++) { var s = b && b.L ? cleanLesson(b.L[n]) : null; lsSet('english3d_l' + n + '_v1', s); }
+    for (var n = 1; n <= 13; n++) { var s = b && b.L ? cleanLesson(b.L[n]) : null; lsSet('english3d_l' + n + '_v1', s); }
     lsSet('english3d_fun_v1', b && b.fun ? deepClean(b.fun, 0) : null);
     lsRawSet('english3d_deco', b && b.deco ? int(b.deco) : null);
     if (b && b.avatar && /^[A-Za-z]{2,12}$/.test(b.avatar)) lsRawSet('english3d_avatar', b.avatar);
