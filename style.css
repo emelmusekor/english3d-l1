@@ -100,6 +100,11 @@ body.touch .desk{display:none}
   #nav{top:calc(var(--hudB,144px) + 6px)}#toast{top:calc(var(--hudB,144px) + 84px);width:max-content;max-width:92vw}#sentBar{top:calc(var(--hudB,144px) + 40px)}
   .hud{flex-wrap:wrap}#questBox{order:3;flex-basis:100%}.hud .btns{flex:1}
 }
+/* 태블릿 세로(좁은 화면): 미션 칸을 단추 아래 한 줄로 넓게 */
+@media (min-width:641px) and (max-width:900px){
+  .hud{flex-wrap:wrap}#questBox{order:3;flex-basis:100%}.hud .btns{flex:1}
+  #nav{top:calc(var(--hudB,144px) + 6px)}#toast{top:calc(var(--hudB,144px) + 84px)}#sentBar{top:calc(var(--hudB,144px) + 40px)}
+}
 /* 휴대폰 세로: 위 칸 = 별·보석 줄 / 단추 줄 / 미션 칸 (단추가 세로로 길게 쌓이지 않게) */
 @media (max-width:480px){
   .hud{gap:6px}.hud .btns{order:2;flex:1 1 100%;flex-wrap:nowrap;justify-content:flex-end;gap:4px;overflow-x:auto;scrollbar-width:none}

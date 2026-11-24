@@ -2403,7 +2403,7 @@ function begin(reset) {
   track('start', { stage: S.stage });
   setInterval(() => track('state', { stage: S.stage, stars: S.stars, correct: S.correct, tries: S.tries, best: S.best }), 30000);
   NPC.beth.talk = bethTalk;
-  if (S.stage === 0) showBanner(STAGES[0].title, '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
+  if (S.stage === 0) showBanner(STAGES[0].title, isTouch ? '왼쪽 화면을 밀어 걷기 · 오른쪽 화면을 밀어 둘러보기 · 말 걸기 단추' : '마우스 클릭 → 화면 돌리기 · W A S D 이동 · E 말 걸기');
   if (S.stage >= STAGES.length - 1) showEnd();
   coachStart();
   if (!isTouch && !coach.el) setTimeout(() => toast('화면을 한 번 클릭하면 마우스로 둘러볼 수 있어요 (Esc로 해제)', 3500), 3200);
