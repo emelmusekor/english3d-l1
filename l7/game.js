@@ -342,7 +342,7 @@ function animatePeople(t, dt) {
   for (const e of extraPeople) animatePerson(e.g || e, t, dt, e.flags || null);
 }
 // ---------- 2.0 꾸미기: 꽃·덤불·둥근 나무·나비·새·꽃가루·반짝임·얼굴 그림 ----------
-const FX2 = { ready: false, tickers: [], butter: [], birds: [], stage: -1, pollen: null, snow: false };
+const FX2 = { ready: false, tickers: [], butter: [], birds: [], stage: -1, pollen: null, snow: false, fountains: [], goals: [] };
 const vig = document.createElement('div'); vig.id = 'vig'; canvas.after(vig);
 const fade2 = document.createElement('div'); fade2.id = 'fade2'; document.body.appendChild(fade2);
 sun.color.set(0xffe6c2); renderer.toneMappingExposure = 1.06;
@@ -400,7 +400,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.5'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v2.6'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -430,6 +430,7 @@ function lampPost2(x, z) {
   block(x - 0.2, z - 0.2, x + 0.2, z + 0.2);
 }
 function fountainFx(x, y, z, r = 1.6) {
+  FX2.fountains.push({ x, y, z, r }); // 놀이 층(play.js)이 이 분수를 찾아 써요
   const n = 28, drops = [], m = new THREE.MeshStandardMaterial({ color: 0xd0ebff, emissive: 0x74c0fc, emissiveIntensity: 0.5, roughness: 0.2, transparent: true, opacity: 0.85 });
   for (let i = 0; i < n; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), m); d.userData.ns = 1; scene.add(d); drops.push(d); }
   FX2.tickers.push((dt, t) => { drops.forEach((d, i) => { const k = (t * 0.7 + i / n * 3.1) % 1, a = i * 2.4; d.position.set(x + Math.cos(a) * r * k, y + 1.4 * k * 4 * (1 - k) - k * (y - 0.9), z + Math.sin(a) * r * k); d.visible = GFX.high || i % 2 === 0; }); });
@@ -704,7 +705,7 @@ function gifts(x, z) { const g = grp(x, z); [[0, 0, 0.6, 0xe03131], [0.7, 0.1, 0
 function flagPole(x, z, c = 0x1c7ed6) { const g = grp(x, z); cyl(0.06, 0.09, 6, 0xced4da, 0, 3, 0, g); ball(0.12, 0xffd43b, 0, 6.05, 0, g); const f = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1, 8, 1), new THREE.MeshStandardMaterial({ color: c, side: THREE.DoubleSide, roughness: 0.8 })); f.position.set(0.86, 5.4, 0); g.add(f); const pa = f.geometry.attributes.position; FX2.tickers.push((dt, t) => { for (let i = 0; i < pa.count; i++) pa.setZ(i, Math.sin(pa.getX(i) * 3 + t * 4) * 0.08 * (pa.getX(i) + 0.8)); pa.needsUpdate = true; }); return g; }
 function busStop(x, z, rot = 0, text = 'BUS') { const g = grp(x, z, rot); cyl(0.06, 0.06, 2.6, 0x495057, 0, 1.3, 0, g); const d = cyl(0.42, 0.42, 0.06, 0x1c7ed6, 0, 2.7, 0, g, 20); d.rotation.x = Math.PI / 2; for (const k of [1, -1]) { const s = textPlane(text, 0.3, { fs: 44, bg: null, fg: '#fff' }, g); s.position.set(0, 2.7, 0.05 * k); if (k < 0) s.rotation.y = Math.PI; } return g; } // 앞뒤 모두 글자
 function hydrant(x, z) { const g = grp(x, z); cyl(0.17, 0.2, 0.7, 0xe03131, 0, 0.35, 0, g); ball(0.18, 0xe03131, 0, 0.72, 0, g); const a = cyl(0.07, 0.07, 0.56, 0xc92a2a, 0, 0.45, 0, g); a.rotation.z = Math.PI / 2; return g; }
-function goal(x, z, rot = 0) { const g = grp(x, z, rot); for (const dx of [-1.5, 1.5]) cyl(0.06, 0.06, 2, 0xffffff, dx, 1, 0, g); box(3.1, 0.12, 0.12, 0xffffff, 0, 2, 0, g); const n = new THREE.Mesh(new THREE.PlaneGeometry(3, 2, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.6 })); n.position.set(0, 1, -0.5); n.rotation.x = 0.25; g.add(n); ball(0.22, 0xffffff, 0.6, 0.22, 0.9, g); return g; }
+function goal(x, z, rot = 0) { const g = grp(x, z, rot); FX2.goals.push({ x, z, rot, g }); for (const dx of [-1.5, 1.5]) cyl(0.06, 0.06, 2, 0xffffff, dx, 1, 0, g); box(3.1, 0.12, 0.12, 0xffffff, 0, 2, 0, g); const n = new THREE.Mesh(new THREE.PlaneGeometry(3, 2, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.6 })); n.position.set(0, 1, -0.5); n.rotation.x = 0.25; g.add(n); ball(0.22, 0xffffff, 0.6, 0.22, 0.9, g); return g; }
 function lantern(x, y, z, c = 0xe03131) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35, roughness: 0.5 })); b.scale.y = 1.15; b.position.set(x, y, z); b.userData.ns = 1; scene.add(b); cyl(0.12, 0.12, 0.08, 0xffd43b, x, y + 0.36, z); cyl(0.12, 0.12, 0.08, 0xffd43b, x, y - 0.36, z); }
 function lanternLine(x1, z1, x2, z2, y = 3.3, cols = [0xe03131, 0xffd43b, 0x1c7ed6]) { const L = Math.hypot(x2 - x1, z2 - z1), n = Math.max(2, Math.round(L / 1.8)); for (let i = 0; i <= n; i++) { const f = i / n; lantern(x1 + (x2 - x1) * f, y - Math.sin(f * Math.PI) * 0.4, z1 + (z2 - z1) * f, cols[i % cols.length]); } for (const [x, z] of [[x1, z1], [x2, z2]]) cyl(0.06, 0.08, y + 0.3, 0x5c4033, x, (y + 0.3) / 2, z); }
 function box(w, h, d, c, x, y, z, parent = scene) {
@@ -1304,6 +1305,7 @@ function camOccDist(ox, oy, oz, dx, dy, dz, far) {
 const camPerson = (ppl, x, z) => { for (const n of ppl) { if (n.follow || !n.g.visible) continue; const q = n.g.position; if (Math.abs(q.x - x) < 0.5 && Math.abs(q.z - z) < 0.5) return true; } return false; };
 function camTick(dt, t) {
   dt = Math.max(0, Math.min(0.1, dt || 0));
+  if (window.PLAY && window.PLAY.cam(dt, t)) return; // 놀이 층: 비행기를 타는 동안은 카메라가 비행기를 따라가요
   const walkIn = Math.min(1, Math.hypot(touch.mx, touch.mz) + (keys.KeyW || keys.KeyS || keys.ArrowUp ? 1 : 0));
   // 말을 걸면 처음 잠깐 상대 쪽으로 돌아봐요. 3인칭이면 얼굴이 대화 상자에 가리지 않게 내 눈높이까지 다가가요.
   const talkN = started && dlgOpen && nearNPC && nearNPC.g.visible ? nearNPC : null;
@@ -1978,6 +1980,7 @@ NPC.bonus.talk = async () => {
 // ---------------- 상호작용 ----------------
 let nearNPC = null;
 function interact() {
+  if (!dlgOpen && !busy && started && window.PLAY && window.PLAY.interact(nearNPC)) return; // 놀이 층: 물건 타기·쓰기 (미션 친구가 먼저예요)
   if (!dlgOpen && !busy && started && !(nearNPC && nearNPC.talk) && window.MULTI && window.MULTI.interact()) return; // 함께 하기: 친구에게 묻기
   if (dlgOpen || busy || !started || !nearNPC) return;
   const n = nearNPC;
@@ -2108,6 +2111,7 @@ function drawMap() {
   mctx.save(); mctx.translate(tx(P.x), tz(P.z)); mctx.rotate(-P.yaw); mctx.fillStyle = '#1d3557';
   mctx.beginPath(); mctx.moveTo(0, -8); mctx.lineTo(5, 6); mctx.lineTo(-5, 6); mctx.fill(); mctx.restore();
   if (window.MULTI) window.MULTI.map(mctx, tx, tz); // 함께 하기: 친구 점
+  if (window.PLAY) window.PLAY.map(mctx, tx, tz); // 놀이 층: 놀이 기구 자리
 }
 
 // ---------------- 목표 표시 ----------------
@@ -2285,7 +2289,8 @@ let lastT = performance.now(), zoneNow = null, mapTick = 0;
 const SPEED = 5.5;
 let running = false;
 function update(dt, t) {
-  if (started && !dlgOpen) {
+  const play = window.PLAY; // 놀이 층: 타고 있는 동안은 걷지 않아요
+  if (started && !dlgOpen && !(play && play.drive(dt, t))) {
     let fx = 0, fz = 0;
     if (keys.KeyW || keys.ArrowUp) fz += 1; if (keys.KeyS || keys.ArrowDown) fz -= 1;
     if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
@@ -2295,7 +2300,7 @@ function update(dt, t) {
     const len = Math.hypot(fx, fz);
     running = len > 0 && !!(keys.ShiftLeft || keys.ShiftRight);
     if (len > 0) {
-      const k = Math.min(1, len) / len * SPEED * (keys.ShiftLeft || keys.ShiftRight ? 1.7 : 1) * dt;
+      const k = Math.min(1, len) / len * SPEED * (keys.ShiftLeft || keys.ShiftRight ? 1.7 : 1) * (play ? play.speed : 1) * dt;
       const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
       P.x += (-sy * fz + cy * fx) * k; P.z += (-cy * fz - sy * fx) * k;
     }
@@ -2553,6 +2558,10 @@ window.__fun = { scene, P, L, NPC, NAV, navGrid, navFind, tickers: FX2.tickers, 
   get S() { return S; }, get started() { return started; }, get dlgOpen() { return dlgOpen; }, get busy() { return busy; }, get objective() { return objective; }, get items() { return items; },
   get stages() { return STAGES.length; } };
 try { const n = document.querySelector('script[src$="net.js"]'); if (n) { const s = document.createElement('script'); s.src = n.getAttribute('src').replace(/net\.js$/, 'fun.js'); document.body.appendChild(s); } } catch (e) {}
+// 놀이 층(play.js): 비행기 타기·공 차기·분수 같은 물건과의 상호작용. net.js 와 같은 폴더에서 불러와요. 없어도 게임은 그대로 돼요.
+window.__play = { scene, camera, P, CAM, L, NPC, NAV, navGrid, colliders, collide, keys, touch, GFX, FX2, tickers: FX2.tickers, haloTex, beep, confetti, toast, textSprite, isTouch, calm, prompt: ui.prompt, lessonNo,
+  get S() { return S; }, get started() { return started; }, get dlgOpen() { return dlgOpen; }, get busy() { return busy; }, get nearNPC() { return nearNPC; }, get items() { return items; }, get objective() { return objective; } };
+try { const n = document.querySelector('script[src$="net.js"]'); if (n) { const s = document.createElement('script'); s.src = n.getAttribute('src').replace(/net\.js$/, 'play.js'); document.body.appendChild(s); } } catch (e) {}
 })();
 // 개발용 화면 위치: ?view=x,z,yaw  /  ?dlg=1
 (() => { const q = new URLSearchParams(location.search); const G = window.__game; if (q.has('view')) { const [x, z, y] = q.get('view').split(',').map(Number); G.P.x = x; G.P.z = z; G.P.yaw = y; } })();
