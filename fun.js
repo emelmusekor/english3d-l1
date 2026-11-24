@@ -1,5 +1,5 @@
 /* 영어 3D · 게임성 층 (모든 단원이 같이 써요)
- * - 보석 💎 모으기: 길 안내 경로 위와 세계 곳곳에 놓여요. 10개마다 별 +1.
+ * - 보석 💎 모으기: 길 안내 경로 위와 세계 곳곳에 놓여요. 10개마다 별 +1. 모은 보석은 놀이 층(play.js)에서 쓸 수 있어요(지갑 = 모은 수 − 쓴 수, 모든 단원 공통).
  * - 미션 결과 카드와 메달 🥇🥈🥉: 미션이 끝날 때 잠깐 떴다가 저절로 사라져요. 대화 상자를 열거나 진행을 막지 않아요.
  * - 배지 12개: 모든 단원 공통 (localStorage 'english3d_fun_v1').
  * - 꾸미기: 모든 단원에서 모은 별 합계에 따라 열려요.
@@ -20,13 +20,13 @@ const MEDAL = ['', '🥉', '🥈', '🥇'];
 
 // ---------------- 저장 (모든 단원 공통) ----------------
 const KEY = 'english3d_fun_v1';
-const F = { v: 1, gems: 0, badges: {}, fresh: [], stars: 0, decoMax: 0 };
+const F = { v: 1, gems: 0, spent: 0, badges: {}, fresh: [], stars: 0, decoMax: 0 };
 const readF = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.v === 1 ? s : null; } catch (e) { return null; } };
-(() => { const s = readF(); if (!s) return; F.gems = Math.max(0, +s.gems || 0); if (s.badges && typeof s.badges === 'object') F.badges = s.badges; if (Array.isArray(s.fresh)) F.fresh = s.fresh.filter(x => typeof x === 'string'); F.stars = Math.max(0, +s.stars || 0); F.decoMax = Math.max(0, +s.decoMax || 0); })();
+(() => { const s = readF(); if (!s) return; F.gems = Math.max(0, +s.gems || 0); if (s.badges && typeof s.badges === 'object') F.badges = s.badges; if (Array.isArray(s.fresh)) F.fresh = s.fresh.filter(x => typeof x === 'string'); F.stars = Math.max(0, +s.stars || 0); F.decoMax = Math.max(0, +s.decoMax || 0); F.spent = Math.max(0, Math.min(F.gems, Math.floor(+s.spent || 0))); })();
 function saveF() { // 다른 창에서 받은 것도 잃지 않게 합쳐서 저장해요
   try {
     const s = readF();
-    if (s) { F.gems = Math.max(F.gems, +s.gems || 0); F.stars = Math.max(F.stars, +s.stars || 0); F.decoMax = Math.max(F.decoMax, +s.decoMax || 0); if (s.badges && typeof s.badges === 'object') for (const k in s.badges) if (!F.badges[k]) F.badges[k] = s.badges[k]; }
+    if (s) { F.gems = Math.max(F.gems, +s.gems || 0); F.spent = Math.max(F.spent, Math.floor(+s.spent || 0)); F.stars = Math.max(F.stars, +s.stars || 0); F.decoMax = Math.max(F.decoMax, +s.decoMax || 0); if (s.badges && typeof s.badges === 'object') for (const k in s.badges) if (!F.badges[k]) F.badges[k] = s.badges[k]; }
     localStorage.setItem(KEY, JSON.stringify(F));
   } catch (e) {}
 }
@@ -175,10 +175,13 @@ function gemInit() {
   m.count = 0; m.frustumCulled = false; m.raycast = () => {}; m.userData.pol = 1; m.userData.camBig = 0;
   G.scene.add(m); GEM.mesh = m;
 }
-const pill = el('div', 'pill', '💎 <span id="gemN">0</span><i><b></b></i>'); pill.id = 'gemBox'; pill.title = '보석 10개마다 별 +1';
+const pill = el('div', 'pill', '💎 <span id="gemN">0</span><i><b></b></i>'); pill.id = 'gemBox'; pill.title = '쓸 수 있는 보석 (놀이에 써요) · 줄은 별까지 남은 보석: 10개 모을 때마다 별 +1';
 try { const sp = $('#stars').parentElement; sp.parentElement.insertBefore(pill, sp.nextSibling); } catch (e) {}
-function hudGem(pop) {
-  const n = G.S.gems | 0; pill.firstElementChild.textContent = n; pill.lastElementChild.firstElementChild.style.width = (n % 10) * 10 + '%';
+// 지갑: 지금까지 모은 보석(모든 단원) − 놀이에 쓴 보석. 모은 수(F.gems·S.gems)와 배지·별은 그대로예요
+const wallet = () => Math.max(0, (F.gems | 0) - (F.spent | 0));
+function spend(n) { n = Math.max(0, Math.round(+n || 0)); if (!n) return true; if (wallet() < n) return false; F.spent = (F.spent | 0) + n; saveF(); hudGem(true); return true; }
+function hudGem(pop) { // 숫자 = 쓸 수 있는 보석(지갑), 아래 줄 = 이 단원에서 다음 별까지(10개마다)
+  const n = G.S.gems | 0; pill.firstElementChild.textContent = wallet(); pill.lastElementChild.firstElementChild.style.width = (n % 10) * 10 + '%';
   if (pop) { pill.classList.remove('pop'); void pill.offsetWidth; pill.classList.add('pop'); }
 }
 function spark(x, y, z) {
@@ -430,5 +433,5 @@ G.tickers.push(safe((dt, t) => {
 }));
 
 safe(renderTitle)(); safe(full)(); safe(hudGem)();
-window.FUN = { F, M, GEM, BADGES, DECOS, grant, showCard, stageDone, spawnScatter, pathGems, note, totals, renderEnd, decoSet, decoCheck };
+window.FUN = { wallet, spend, F, M, GEM, BADGES, DECOS, grant, showCard, stageDone, spawnScatter, pathGems, note, totals, renderEnd, decoSet, decoCheck };
 })();
