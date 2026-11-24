@@ -2,7 +2,7 @@
  * - net-config.js 의 endpoint 가 비어 있으면 아무것도 안 해요.
  * - 반에 참여하지 않으면 아무것도 안 보내요. 혼자 하기는 언제나 그대로 돼요.
  * - 어떤 경우에도 오류를 밖으로 던지지 않아요.
- * - 이어하기 저장: 반 코드 + 번호 + 비밀번호 4자리로 들어오면 진행 상황을 서버에 올리고, 다른 컴퓨터에서도 내려받아요.
+ * - 이어하기 저장: 반 코드 + 번호 + 이름으로 들어오면 진행 상황을 서버에 올리고, 다른 컴퓨터에서도 내려받아요. (학생 비밀번호는 없어요)
  *
  * 쓰는 법 (게임 쪽):
  *   NET.init({ lesson: 'L1' });                 // 시작 화면이 준비된 뒤 한 번
@@ -196,7 +196,7 @@
     });
   }
 
-  // ------------------------------------------------------------ 이어하기 저장 (반 코드 + 번호 + 비밀번호 4자리)
+  // ------------------------------------------------------------ 이어하기 저장 (반 코드 + 번호)
   // 들어오면 서버가 '표(tok)'를 줘요. 그 표로 진행 상황을 서버에 올리고, 다른 컴퓨터에서 들어오면 내려받아요.
   // 서버에는 언제나 "더 많이 한 쪽"을 남겨요(뒤로 가지 않아요). 이 컴퓨터의 기록이 누구 것인지(OWNER_KEY)도 적어 둬요.
   var OWNER_KEY = 'english3d_owner';
@@ -318,8 +318,8 @@
     } catch (e) {}
   }
   function startSaveTimer() { if (saveTimer || !endpoint) return; saveTimer = setInterval(function () { pushSave(false); }, SAVE_MS); }
-  var NOTE_REAUTH = '비밀번호가 초기화됐어요. "바꾸기"를 눌러 새 비밀번호를 정하면 다시 저장돼요.';
-  var NOTE_NOPIN = '"바꾸기"를 눌러 비밀번호를 정하면 다른 컴퓨터에서도 이어서 할 수 있어요.';
+  var NOTE_REAUTH = '저장을 다시 이어요…';
+  var NOTE_NOPIN = '';
   var NOTE_OFFLINE = '';
 
   // ------------------------------------------------------------ 시작 화면 UI
@@ -387,8 +387,7 @@
     }
     var inCode = field('반 코드', { maxlength: '5', placeholder: 'ABCDE', class: 'net-code', autocapitalize: 'characters', spellcheck: 'false' });
     var inNum = field('번호', { type: 'number', min: '1', max: '99', inputmode: 'numeric', placeholder: '3' });
-    var inNick = field('별명', { maxlength: '12', placeholder: '예: 별빛토끼', spellcheck: 'false' }, 'net-wide');
-    var inPin = field('비밀번호 (숫자 4자리)', { type: 'password', maxlength: '4', inputmode: 'numeric', pattern: '[0-9]*', placeholder: '····', autocomplete: 'off', class: 'net-pin' }, 'net-wide');
+    var inNick = field('이름', { maxlength: '12', placeholder: '예: 김민수', spellcheck: 'false' }, 'net-wide');
     form.appendChild(row);
     var btns = el('div', 'net-btns');
     var goBtn = el('button', '', '참여'); goBtn.type = 'submit';
@@ -398,8 +397,8 @@
     form.appendChild(btns);
     var msg = el('div', 'net-msg');
     form.appendChild(msg);
-    form.appendChild(el('div', 'net-hint', '🔑 비밀번호는 처음에 내가 정해요. 다음부터 같은 번호와 비밀번호로 들어오면 다른 컴퓨터에서도 이어서 할 수 있어요. 잊었으면 선생님께 말해요.'));
-    form.appendChild(el('div', 'net-hint', '진짜 이름은 쓰지 말고 별명을 써요. 참여하지 않아도 게임은 그대로 할 수 있어요.'));
+    form.appendChild(el('div', 'net-hint', '☁️ 같은 반 코드·번호로 들어오면 다른 컴퓨터에서도 이어서 할 수 있어요. 내 번호를 정확히 적어요.'));
+    form.appendChild(el('div', 'net-hint', '참여하지 않아도 게임은 그대로 할 수 있어요.'));
     var ask = el('div', 'net-ask'); ask.style.display = 'none'; form.appendChild(ask);
 
     var joined = el('div', 'net-joined');
@@ -408,8 +407,7 @@
     var links = panel.querySelector('.links');
     if (links) panel.insertBefore(box, links); else panel.appendChild(box);
 
-    ui = { box: box, openBtn: openBtn, form: form, joined: joined, inCode: inCode, inNum: inNum, inNick: inNick, inPin: inPin, ask: ask, goBtn: goBtn, leaveBtn: leaveBtn, msg: msg, editing: false };
-    inPin.addEventListener('input', function () { var v = inPin.value.replace(/\D/g, '').slice(0, 4); if (v !== inPin.value) inPin.value = v; });
+    ui = { box: box, openBtn: openBtn, form: form, joined: joined, inCode: inCode, inNum: inNum, inNick: inNick, ask: ask, goBtn: goBtn, leaveBtn: leaveBtn, msg: msg, editing: false };
 
     openBtn.onclick = function () { ui.editing = true; msg.textContent = ''; render(); try { inCode.focus(); } catch (e) {} };
     closeBtn.onclick = function () { ui.editing = false; render(); };
@@ -428,21 +426,19 @@
       msg.className = 'net-msg';
       if (code.length !== 5) { msg.textContent = '반 코드 5글자를 적어 주세요.'; return false; }
       if (!(num >= 1 && num <= 99)) { msg.textContent = '번호를 1~99 숫자로 적어 주세요.'; return false; }
-      if (!nick) { msg.textContent = '별명을 적어 주세요.'; return false; }
-      var pin = inPin.value.replace(/\D/g, '');
-      if (pin.length !== 4) { msg.textContent = '비밀번호 숫자 4자리를 적어 주세요. (처음이면 내가 정해요)'; try { inPin.focus(); } catch (e) {} return false; }
+      if (!nick) { msg.textContent = '이름을 적어 주세요.'; return false; }
       goBtn.disabled = true; goBtn.textContent = '확인 중…'; msg.textContent = ''; ask.style.display = 'none';
       var done = function (res, mode) {
         setProfile({ code: code, num: num, nick: res.nick || nick, name: cleanText(res.name, 20), tok: typeof res.token === 'string' ? res.token : '' });
-        note = ''; ui.editing = false; inPin.value = '';
+        note = ''; ui.editing = false;
         startTimer(); flush(true); startSaveTimer();
         var changed = false;
         if (profile.tok) changed = syncWith(res.save || null, mode);
         if (changed && titleShowing()) { try { sessionStorage.setItem('english3d_synced', res.save ? '저장된 기록을 불러왔어요. 이어서 해요!' : '처음부터 시작해요!'); } catch (e) {} window.__e3dReloading = true; location.reload(); return; }
-        if (profile.tok) note = res.isNew ? '☁️ 비밀번호를 정했어요. 이제 자동으로 저장돼요.' : '☁️ 자동으로 저장돼요.';
+        if (profile.tok) note = '☁️ 자동으로 저장돼요.';
         render();
       };
-      post({ action: 'login', code: code, num: num, nick: nick, pin: pin, lesson: lesson }).then(function (res) {
+      post({ action: 'login', code: code, num: num, nick: nick, lesson: lesson }).then(function (res) {
         goBtn.disabled = false; goBtn.textContent = '참여';
         if (res.ok) {
           var me = code + '|' + num, owner = lsRaw(OWNER_KEY), local = collect();
@@ -460,7 +456,7 @@
           bs.appendChild(y); bs.appendChild(n); ask.appendChild(bs);
         } else if (res.error === 'network') {
           msg.textContent = '연결이 안 돼요. 인터넷을 확인하거나, 혼자 하기로 계속해도 돼요.';
-        } else if (res.error === 'bad' && /알 수 없는/.test(String(res.msg || ''))) {
+        } else if ((res.error === 'bad' && /알 수 없는|비밀번호/.test(String(res.msg || ''))) || res.error === 'pin' || res.error === 'locked') {
           // 서버가 아직 예전 판이면 저장 없이 참여만 해요
           join(code, num, nick, function (r2) {
             if (r2.ok) { setProfile({ code: code, num: num, nick: r2.nick || nick, name: cleanText(r2.name, 20), tok: '' }); note = '저장 기능은 아직 준비 중이에요. 기록은 이 컴퓨터에 남아요.'; ui.editing = false; startTimer(); flush(true); render(); }
@@ -468,7 +464,6 @@
           });
         } else {
           msg.textContent = res.msg || '참여하지 못했어요. 반 코드를 다시 확인해 주세요.';
-          if (res.error === 'pin' || res.error === 'locked') { inPin.value = ''; try { inPin.focus(); } catch (e) {} }
         }
       });
       return false;
@@ -505,7 +500,6 @@
         render();
       };
       ui.joined.appendChild(ch);
-      if (!note && !profile.tok) note = NOTE_NOPIN;
       if (note) ui.joined.appendChild(el('div', 'net-note', note));
       else if (profile.tok) ui.joined.appendChild(el('div', 'net-note', '☁️ 자동으로 저장돼요.'));
     } else if (note && !ui.editing) {
@@ -513,6 +507,23 @@
     } else {
       ui.openBtn.textContent = '🏫 우리 반으로 참여하기 (선택)';
     }
+  }
+
+  // 저장용 표(token)를 조용히 받아 와요: 비밀번호가 없어져서 반 코드 + 번호만으로 돼요
+  function relogin(p) {
+    try {
+      post({ action: 'login', code: p.code, num: p.num, nick: p.nick, lesson: lesson }).then(function (res) {
+        if (profile !== p || !res.ok || typeof res.token !== 'string' || !res.token) return;
+        p.tok = res.token; lsSet(PROFILE_KEY, p);
+        var owner = lsRaw(OWNER_KEY), me = p.code + '|' + p.num;
+        var changed = syncWith(res.save || null, owner && owner !== me ? 'server' : 'merge');
+        startSaveTimer();
+        var once = false; try { once = !sessionStorage.getItem('english3d_reloaded'); } catch (e) {}
+        if (changed && titleShowing() && once) { try { sessionStorage.setItem('english3d_reloaded', '1'); sessionStorage.setItem('english3d_synced', '다른 곳에서 하던 기록을 불러왔어요!'); } catch (e) {} window.__e3dReloading = true; location.reload(); return; }
+        if (note === NOTE_REAUTH) note = '';
+        render();
+      });
+    } catch (e) {}
   }
 
   // ------------------------------------------------------------ 시작
@@ -558,10 +569,10 @@
             var changed = syncWith(res.save || null, owner && owner !== me ? 'server' : 'merge');
             var once = false; try { once = !sessionStorage.getItem('english3d_reloaded'); } catch (e) {}
             if (changed && titleShowing() && once) { try { sessionStorage.setItem('english3d_reloaded', '1'); sessionStorage.setItem('english3d_synced', '다른 곳에서 하던 기록을 불러왔어요!'); } catch (e) {} window.__e3dReloading = true; location.reload(); }
-          } else if (res.error === 'auth') { p2.tok = ''; lsSet(PROFILE_KEY, p2); note = NOTE_REAUTH; render(); }
+          } else if (res.error === 'auth') { p2.tok = ''; lsSet(PROFILE_KEY, p2); relogin(p2); }
         });
         startSaveTimer();
-      }
+      } else if (profile) relogin(profile);
       try { var sm = sessionStorage.getItem('english3d_synced'); if (sm) { sessionStorage.removeItem('english3d_synced'); note = '☁️ ' + sm; setTimeout(render, 0); } } catch (e) {}
       if (queue.length || profile) { startTimer(); setTimeout(function () { flush(true); }, 1500); }
     } catch (e) {}
