@@ -1,5 +1,5 @@
 /* 영어 3D · 게임성 층 (모든 단원이 같이 써요)
- * - 보석 💎 모으기: 길 안내 경로 위와 세계 곳곳에 놓여요. 10개마다 별 +1. 모은 보석은 놀이 층(play.js)에서 쓸 수 있어요(지갑 = 모은 수 − 쓴 수, 모든 단원 공통).
+ * - 보석 💎 모으기: 길 안내 경로 위와 세계 곳곳에 놓여요. 10개마다 별 +1. 모은 보석은 놀이 층(play.js)에서 쓸 수 있어요(지금 가진 보석 = 모은 수 − 쓴 수, 모든 단원 공통).
  * - 미션 결과 카드와 메달 🥇🥈🥉: 미션이 끝날 때 잠깐 떴다가 저절로 사라져요. 대화 상자를 열거나 진행을 막지 않아요.
  * - 배지 12개: 모든 단원 공통 (localStorage 'english3d_fun_v1').
  * - 꾸미기: 모든 단원에서 모은 별 합계에 따라 열려요.
@@ -175,12 +175,19 @@ function gemInit() {
   m.count = 0; m.frustumCulled = false; m.raycast = () => {}; m.userData.pol = 1; m.userData.camBig = 0;
   G.scene.add(m); GEM.mesh = m;
 }
-const pill = el('div', 'pill', '💎 <span id="gemN">0</span><i><b></b></i>'); pill.id = 'gemBox'; pill.title = '쓸 수 있는 보석 (놀이에 써요) · 줄은 별까지 남은 보석: 10개 모을 때마다 별 +1';
+const pill = el('div', 'pill', '💎 <span id="gemN">0</span><i><b></b></i>'); pill.id = 'gemBox'; pill.title = '지금 가진 보석 (놀이에 써요) · 아래 줄: 10개 모을 때마다 별 +1';
 try { const sp = $('#stars').parentElement; sp.parentElement.insertBefore(pill, sp.nextSibling); } catch (e) {}
-// 지갑: 지금까지 모은 보석(모든 단원) − 놀이에 쓴 보석. 모은 수(F.gems·S.gems)와 배지·별은 그대로예요
+// 지금 가진 보석 = 지금까지 모은 보석(모든 단원) − 놀이에 쓴 보석. 모은 수(F.gems·S.gems)와 배지·별은 그대로예요
 const wallet = () => Math.max(0, (F.gems | 0) - (F.spent | 0));
-function spend(n) { n = Math.max(0, Math.round(+n || 0)); if (!n) return true; if (wallet() < n) return false; F.spent = (F.spent | 0) + n; saveF(); hudGem(true); return true; }
-function hudGem(pop) { // 숫자 = 쓸 수 있는 보석(지갑), 아래 줄 = 이 단원에서 다음 별까지(10개마다)
+function spend(n) { n = Math.max(0, Math.round(+n || 0)); if (!n) return true; if (wallet() < n) return false; F.spent = (F.spent | 0) + n; saveF(); hudGem(true); gemFly(n); return true; }
+function gemFly(n) { // 쓴 만큼 '−n' 이 💎 칸에서 떨어져요
+  try {
+    if (!document.getElementById('gemFlyCss')) { const st = el('style'); st.id = 'gemFlyCss'; st.textContent = '.gemFly{position:fixed;z-index:60;pointer-events:none;font-size:24px;color:#e03131;text-shadow:0 2px 0 #fff,0 0 8px #fff;animation:gemFly 1.7s ease-out forwards}@keyframes gemFly{0%{transform:translate(-50%,0) scale(.6);opacity:0}15%{transform:translate(-50%,6px) scale(1.25);opacity:1}100%{transform:translate(-50%,74px) scale(1);opacity:0}}#gemBox.spend{animation:gemSpend .5s}@keyframes gemSpend{0%,100%{background:rgba(255,255,255,.92)}40%{background:#ffe3e3}}'; document.head.appendChild(st); }
+    const r = pill.getBoundingClientRect(), d = el('div', 'gemFly', '💎 −' + n); d.style.left = (r.left + r.width / 2) + 'px'; d.style.top = (r.bottom - 4) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1750);
+    pill.classList.remove('spend'); void pill.offsetWidth; pill.classList.add('spend');
+  } catch (e) {}
+}
+function hudGem(pop) { // 숫자 = 지금 가진 보석, 아래 줄 = 이 단원에서 다음 별까지(10개마다)
   const n = G.S.gems | 0; pill.firstElementChild.textContent = wallet(); pill.lastElementChild.firstElementChild.style.width = (n % 10) * 10 + '%';
   if (pop) { pill.classList.remove('pop'); void pill.offsetWidth; pill.classList.add('pop'); }
 }

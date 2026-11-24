@@ -1,5 +1,6 @@
 /* 영어 3D · 놀이 층 (모든 단원이 같이 써요) — 물건과의 상호작용
- * [2차] 💎 보석(fun.js 지갑)을 내고, 그 단원 영어 표현을 맞혀야 탈 수 있어요(공 차기·벤치는 무료). 단원마다 그 단원 표현으로 하는 놀이가 두 가지씩 있어요(L2 푸드 트럭 등).
+ * [3차] 관문은 한 번뿐이에요(틀리면 그 도전은 끝, 보석은 그대로. 다시 E 하면 다른 문제). 간판(이름+💎값)·바닥 고리, 연·낚시·농구·보물 상자와 단원 놀이가 하나씩 더 있어요.
+ * [2차] 💎 보석(fun.js 가 센 '모은 수 − 쓴 수')을 내고, 그 단원 영어 표현을 맞혀야 탈 수 있어요(공 차기·벤치는 무료). 단원마다 그 단원 표현으로 하는 놀이가 두 가지씩 있어요(L2 푸드 트럭 등).
  * ✈️ 비행기 타기 · ⚽ 공 차기(골대) · ⛲ 분수(동전 던지고 소원 빌기·무지개) · 🪑 벤치에 앉기 · 그네 · 트램펄린 ·
  * 🛴 킥보드 · 🎈 풍선 터뜨리기 · 🔔 종 치기 · 🎆 불꽃놀이 버튼 · ⛄ 눈사람 / 🏰 모래성 만들기
  * - 단원 세계 파일은 건드리지 않아요. 실행 중에 빈 자리(벽·건물·사람·미션 자리와 떨어진 곳)를 찾아 놓아요. 단원 번호가 씨앗이라 늘 같은 자리예요.
@@ -66,7 +67,7 @@ const AVOID = {
 const KEY = 'english3d_play_v1';
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
 const DAY = { d: today(), goals: 0, tried: {}, hi: {}, all: 0 };
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.d === DAY.d) { DAY.goals = Math.max(0, +s.goals || 0); if (s.tried && typeof s.tried === 'object') DAY.tried = s.tried; if (s.hi && typeof s.hi === 'object') DAY.hi = s.hi; DAY.all = s.all ? 1 : 0; } } catch (e) {}
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.d === DAY.d) { DAY.goals = Math.max(0, +s.goals || 0); if (s.tried && typeof s.tried === 'object') DAY.tried = s.tried; if (s.hi && typeof s.hi === 'object') DAY.hi = s.hi; DAY.all = s.all ? 1 : 0; DAY.fish = Math.max(0, +s.fish || 0); if (typeof s.deco === 'string') DAY.deco = s.deco; } } catch (e) {}
 const saveDay = () => { try { localStorage.setItem(KEY, JSON.stringify(DAY)); } catch (e) {} };
 
 const ST = { ready: false, dead: false, things: [], kinds: [], ride: null, tgt: null, seatMe: null, lx: 0, lz: 0, pvx: 0, pvz: 0, confT: 0, actText: null, top: false, placed: [], t: 0, boostT: 0, hiT: 0, spotN: 0, danceT: 0 };
@@ -91,7 +92,7 @@ const tag = (m) => { m.userData.camBig = 0; return m; }; // 카메라 가림 계
 const add = (m, x, y, z, parent) => { m.position.set(x, y, z); (parent || scene).add(tag(m)); return m; };
 const box = (w, h, d, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const cyl = (rt, rb, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 14), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const sph = (r, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.SphereGeometry(r, r < 0.13 ? 8 : 14, r < 0.13 ? 6 : 10), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const sph = (r, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.SphereGeometry(r, r < 0.13 ? 8 : 12, r < 0.13 ? 5 : 8), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const grp = (x, z, rot, parent) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot || 0; (parent || scene).add(g); return g; };
 const dyn = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x || 0, y || 0, z || 0); g.userData.dyn = 1; parent.add(g); return g; }; // 움직이는 부분 (합치지 않아요)
 const noRay = (o) => { o.raycast = () => {}; o.userData.pol = 1; return o; };
@@ -340,11 +341,31 @@ function thing(kind, emoji, x, z, o) {
   const th = Object.assign({ kind, emoji, x, z, ux: x, uz: z, useR: 2.4, fp: [], solidR: 0, hidden: false, own: true, objs: [], clearT: 9, label: () => null, use: null, tick: null, verb: '하기', sign: null, signY: 3, ph: Math.random() * 6, price: 0, passN: 0, passT: 0, busy: 0 }, o || {});
   ST.things.push(th); if (!ST.kinds.includes(kind)) ST.kinds.push(kind); return th;
 }
-function addSign(th, y, x, z) { // 멀리서도 보이는 그림 팻말
-  const s = noRay(G.textSprite(th.emoji, 0.8, { fs: 64, bg: 'rgba(255,255,255,.93)', pad: 14 }));
-  s.material.toneMapped = false; s.position.set(x == null ? th.x : x, y, z == null ? th.z : z); scene.add(s); th.sign = s; th.signY = y; th.objs.push(s);
+function addSign(th, y, x, z) { th.signY = y; th.signAt = [x, z]; th.wantSign = 1; } // 간판 자리만 적어 두고, 값이 정해진 뒤 makeSigns 가 만들어요
+const SIGNNAME = { goal: '공 차기', bench: '벤치에 앉기' };
+function makeSigns() { // 멀리서도 보이는 간판: 그림 + 이름 + 💎값 (늘 나를 봐요 → 2.5D 에서도 읽혀요)
+  for (const th of ST.things) {
+    if (!th.wantSign || th.sign) continue;
+    const name = th.name || (th.kind === 'build' ? (G.FX2.snow ? '눈사람 만들기' : '모래성 만들기') : NAME[th.kind]) || SIGNNAME[th.kind] || '', free = !th.price;
+    const s = noRay(G.textSprite(th.emoji + ' ' + name + '\n' + (th.price ? '💎 ' + th.price : '무료'), 0.98, { fs: 46, bg: 'rgba(255,255,255,.96)', fg: '#1d3557', border: th.themed ? '#e76f51' : free ? '#2b8a3e' : '#1c7ed6', pad: 18 }));
+    s.material.toneMapped = false; s.material.depthWrite = false; const a = th.signAt || [];
+    s.position.set(a[0] == null ? th.x : a[0], th.signY, a[1] == null ? th.z : a[1]); scene.add(s); th.sign = s; th.objs.push(s); if (th.hidden) s.visible = false;
+  }
 }
-function setHidden(th, on) { th.hidden = on; for (const o of th.objs) o.visible = !on; if (th.onHide) th.onHide(on); }
+// 놀이 자리 바닥 고리 (한꺼번에 한 번에 그려요)
+const RING = { mesh: null, list: [] };
+function makeRings() {
+  const list = ST.things.filter(th => th.own && th.fp.length && !/^(plane|scooter|bike|bus|cat|goal)$/.test(th.kind)); if (!list.length) return;
+  const geo = new THREE.RingGeometry(0.94, 1, 44); geo.rotateX(-PI / 2);
+  const m = noRay(new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: G.FX2.snow ? 0x4dabf7 : 0xffffff, transparent: true, opacity: 0.6, depthWrite: false }), list.length));
+  m.userData.play = 1; m.userData.camBig = 0; m.frustumCulled = false; scene.add(m); RING.mesh = m; RING.list = list; ringUpdate();
+}
+function ringUpdate() {
+  if (!RING.mesh) return; const D = new THREE.Object3D();
+  RING.list.forEach((th, i) => { const r = th.hidden ? 0.0001 : th.fp[0].r + 0.3; D.position.set(th.fp[0].x, 0.05, th.fp[0].z); D.scale.set(r, 1, r); D.updateMatrix(); RING.mesh.setMatrixAt(i, D.matrix); });
+  RING.mesh.instanceMatrix.needsUpdate = true;
+}
+function setHidden(th, on) { th.hidden = on; for (const o of th.objs) o.visible = !on; if (th.onHide) th.onHide(on); ringUpdate(); }
 const missionNear = () => { const n = G.nearNPC; return !!(n && (n.talk || (n.g.userData.mark && n.g.userData.mark.visible))); };
 const npcNear = (x, z, r) => { for (const id in G.NPC) { const g = G.NPC[id].g; if (g.visible && hyp(g.position.x - x, g.position.z - z) < r) return true; } return false; };
 // 내 캐릭터를 자리에 앉혀요 (엔진이 매 프레임 서 있는 자세로 되돌리므로 그 뒤에 다시 맞춰요)
@@ -397,6 +418,9 @@ function buildAirfield(sp) {
   box(2.4, 0.1, 0.75, C2, 0, 1.2, -1.75, pl); box(0.1, 0.95, 0.8, C1, 0, 1.75, -1.8, pl);
   for (const sx of [-1, 1]) { const w = cyl(0.26, 0.26, 0.16, 0x212529, sx * 0.85, 0.26, 0.55, pl); w.rotation.z = PI / 2; box(0.08, 0.5, 0.08, 0x868e96, sx * 0.8, 0.55, 0.55, pl); }
   { const w = cyl(0.13, 0.13, 0.1, 0x212529, 0, 0.13, -1.7, pl); w.rotation.z = PI / 2; box(0.06, 0.4, 0.06, 0x868e96, 0, 0.36, -1.7, pl); }
+  tor(0.5, 0.05, 0x343a40, 0, 1.05, 1.56, pl); // 엔진 덮개 테
+  for (const sx of [-1, 1]) { ell(0.2, 0.7, 0.85, 1.5, C1, sx * 0.85, 0.33, 0.5, pl); const st = cyl(0.03, 0.03, 0.62, 0x868e96, sx * 0.72, 1.02, 0.3, pl, 6); st.rotation.z = sx * 0.95; ell(0.66, 0.55, 0.1, 1, C1, sx * 3.28, 0.8, 0.25, pl); cyl(0.3, 0.3, 0.02, C1, sx * 1.75, 0.87, 0.25, pl, 16); cyl(0.17, 0.17, 0.025, C2, sx * 1.75, 0.87, 0.25, pl, 14); }
+  box(0.11, 0.2, 0.82, C2, 0, 1.98, -1.8, pl); ell(0.42, 1, 0.3, 0.9, C2, 0, 1.2, -1.75, pl); for (const z of [0.9, 0.3, -0.5]) box(0.02, 0.2, 0.3, C2, 0.545, 1.1, z, pl);
   const glass = box(0.85, 0.42, 0.05, new THREE.MeshStandardMaterial({ color: 0xa5d8ff, roughness: 0.15, transparent: true, opacity: 0.55 }), 0, 1.74, 0.5, pl); glass.rotation.x = -0.4;
   const prop = dyn(pl, 0, 1.05, 2.08);
   box(1.9, 0.16, 0.05, 0x343a40, 0, 0, 0, prop); box(0.16, 1.9, 0.05, 0x343a40, 0, 0, 0, prop); sph(0.15, 0xffd43b, 0, 0, 0.02, prop);
@@ -539,7 +563,7 @@ function planeCam(th, dt) {
 }
 
 // ---------------- ⚽ 공·골대 ----------------
-const BALL = { list: [], goals: [], spot: null };
+const BALL = { list: [], goals: [], spot: null, until: 0, was: false }; // until: 이때까지 공을 찰 수 있어요 (영어 관문을 맞히면 90초)
 function ballTex(kind) {
   const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d');
   if (kind === 'beach') { ['#ff6b6b', '#ffffff', '#ffd43b', '#ffffff', '#4dabf7', '#ffffff', '#51cf66', '#ffffff'].forEach((col, i) => { x.fillStyle = col; x.fillRect(i * 16, 0, 16, 64); }); }
@@ -553,7 +577,14 @@ function addBall(kind, hx, hz) {
   const blob = noRay(new THREE.Mesh(new THREE.CircleGeometry(r * 0.95, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false })));
   blob.rotation.x = -PI / 2; scene.add(blob);
   const b = { kind, m, blob, r, x: hx, y: r, z: hz, vx: 0, vy: 0, vz: 0, home: [hx, hz], rest: 0, kickT: 0, score: 0, pop: 0, e: beach ? 0.74 : 0.56, g: beach ? 10 : 15, drag: beach ? 0.85 : 0.3, fr: beach ? 1.6 : 2.3, pw: beach ? 0.8 : 1 };
-  BALL.list.push(b); return b;
+  BALL.list.push(b);
+  // 잠긴 공: 🔒 가 떠 있고, 닿아도 굴러가지 않아요. 가까이에서 E → 영어 문제를 맞히면 한동안 찰 수 있어요
+  b.lock = noRay(G.textSprite('🔒', 0.42, { fs: 64, bg: 'rgba(255,255,255,.9)', pad: 10 })); b.lock.material.toneMapped = false; scene.add(b.lock);
+  const th = thing('ball', '⚽', hx, hz, { own: false, verb: '차기', useR: 2.3 });
+  th.label = () => BALL.until > ST.t ? null : '공 차기 ⚽ 🔒';
+  th.use = () => { BALL.until = ST.t + 90; BALL.was = true; G.beep([[523, .06], [784, .1]]); tell('ball', '⚽ 공이 풀렸어요! 90초 동안 달려가서 뻥 차 봐요<br><small>골대에 넣으면 골!</small>', 3000); fire('use', { kind: 'ball' }); };
+  th.tick = () => { th.x = th.ux = b.x; th.z = th.uz = b.z; };
+  return b;
 }
 function ballHome(b) { b.x = b.home[0]; b.z = b.home[1]; b.y = b.r; b.vx = b.vy = b.vz = 0; b.rest = 0; b.score = 0; b.pop = 0.001; }
 const bax = new THREE.Vector3();
@@ -591,7 +622,6 @@ function ballStep(b, dt, canKick) {
         const kx = nx * 0.55 + ST.pvx / sp * 0.45, kz = nz * 0.55 + ST.pvz / sp * 0.45, kl = hyp(kx, kz) || 1, pw = (3 + sp * 1.35) * b.pw;
         b.vx = kx / kl * pw; b.vz = kz / kl * pw; b.vy = 1.4 + pw * 0.2; b.kickT = 0.25; b.rest = 0;
         G.beep([[190, .04], [120, .06]]); fire('kick', { i: BALL.list.indexOf(b), x: b.x, z: b.z, vx: b.vx, vz: b.vz });
-        if (!DAY.tried.ball) tell('ball', '⚽ 뻥! 공을 찼어요. 골대에 넣어 봐요');
       } else ballBounce(b, nx, nz, m - d, 0.3);
       b.x = P.x + nx * m; b.z = P.z + nz * m;
     }
@@ -666,7 +696,6 @@ function buildBalls() {
   }
   homes.slice(0, 2).forEach((h, i) => addBall(i ? 'beach' : 'soccer', h[0], h[1]));
   if (homes.length === 1 && eng.length) { const h = homes[0]; if (reachAt(h[0] + 1.2, h[1] + 0.8)) addBall('beach', h[0] + 1.2, h[1] + 0.8); }
-  if (BALL.list.length) ST.kinds.push('ball');
 }
 
 // ---------------- ⛲ 분수 ----------------
@@ -683,6 +712,7 @@ function buildFountain(sp, eng) {
   if (!eng) {
     const g = grp(x, z, 0); th.g = g; th.objs.push(g);
     cyl(2.5, 2.65, 0.7, 0xb0bec5, 0, 0.35, 0, g, 24); cyl(0.36, 0.46, 1.5, 0xcfd8dc, 0, 1.2, 0, g, 12); cyl(0.95, 0.4, 0.3, 0xcfd8dc, 0, 2.0, 0, g, 16); sph(0.34, 0x90caf9, 0, 2.3, 0, g);
+    flatZ(tor(2.55, 0.1, 0xcfd8dc, 0, 0.7, 0, g)); flatZ(tor(0.95, 0.05, 0xb0bec5, 0, 2.15, 0, g)); flatZ(tor(0.46, 0.06, 0xb0bec5, 0, 0.78, 0, g)); for (let i = 0; i < 8; i++) { const a = i * PI / 4; sph(i % 2 ? 0.12 : 0.17, i % 2 ? 0xcfd8dc : 0x90caf9, Math.cos(a) * 2.55, 0.8, Math.sin(a) * 2.55, g); } // 테두리 · 구슬 장식
     bake(g);
     const water = cyl(2.15, 2.15, 0.74, new THREE.MeshStandardMaterial({ color: 0x64b5f6, roughness: 0.25 }), 0, 0.37, 0, g, 24); water.userData.keep = 1;
     addSign(th, 3.9);
@@ -774,6 +804,7 @@ function buildSwing(sp, rot) {
   const g = grp(sp.x, sp.z, rot); th.g = g; th.objs.push(g);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const p = cyl(0.07, 0.08, 3.25, 0xe8590c, sx * 1.05, 1.55, sz * 0.62, g, 8); p.rotation.x = sz * -0.4; }
   const bar = cyl(0.07, 0.07, 2.3, 0xe8590c, 0, 3.05, 0, g, 8); bar.rotation.z = PI / 2;
+  for (const sx of [-1, 1]) { sph(0.12, 0xffd43b, sx * 1.12, 3.05, 0, g); for (const sz of [-1, 1]) cyl(0.13, 0.15, 0.08, 0xffd43b, sx * 1.05, 0.04, sz * 1.26, g, 10); } // 이음매 · 발 받침
   bake(g);
   const piv = dyn(g, 0, 3.05, 0);
   for (const sx of [-1, 1]) cyl(0.02, 0.02, 2.3, 0x868e96, sx * 0.36, -1.15, 0, piv, 6);
@@ -800,6 +831,8 @@ function buildTramp(sp) {
   const g = grp(sp.x, sp.z, 0); th.g = g; th.objs.push(g);
   for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; cyl(0.05, 0.05, 0.5, 0xffd43b, Math.cos(a) * 1.45, 0.25, Math.sin(a) * 1.45, g, 6); }
   const ring = add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.13, 8, 28), mat(0x1c7ed6)), 0, 0.5, 0, g); ring.rotation.x = PI / 2;
+  for (let i = 0; i < 12; i++) { const a = i / 12 * PI * 2; ell(0.36, 1, 0.26, 0.5, i % 2 ? 0xffd43b : 0xff6b6b, Math.cos(a) * 1.5, 0.57, Math.sin(a) * 1.5, g).rotation.y = -a + PI / 2; } // 알록달록 안전 덮개
+  for (const sx of [-1, 1]) cyl(0.03, 0.03, 0.62, 0xced4da, sx * 0.25, 0.28, 1.7, g, 6).rotation.x = 0.35; for (const y of [0.18, 0.4]) flatX(cyl(0.025, 0.025, 0.5, 0xced4da, 0, y, 1.74 - y * 0.35, g, 6)); // 사다리
   bake(g);
   const mt = add(new THREE.Mesh(new THREE.CylinderGeometry(1.42, 1.42, 0.04, 24), new THREE.MeshStandardMaterial({ color: 0x343a40, roughness: 0.6 })), 0, 0.48, 0, g);
   th.dip = 0; th.n = 0; th.on = false;
@@ -830,6 +863,7 @@ function buildScooter(sp, rot) {
   for (const z of [-0.42, 0.45]) { const w = cyl(0.12, 0.12, 0.07, 0x212529, 0, 0.12, z, g, 12); w.rotation.z = PI / 2; }
   const stem = cyl(0.03, 0.03, 0.98, 0xced4da, 0, 0.62, 0.4, g, 6); stem.rotation.x = -0.12;
   box(0.52, 0.05, 0.05, 0x343a40, 0, 1.1, 0.34, g);
+  for (const s of [-1, 1]) flatX(cap(0.032, 0.09, 0xe03131, s * 0.25, 1.1, 0.34, g)); ell(0.14, 0.5, 0.3, 1, C, 0, 0.25, -0.42, g); ell(0.13, 0.9, 0.25, 2.6, 0x212529, 0, 0.185, 0, g); sph(0.045, 0xffd43b, 0, 1.0, 0.39, g); // 손잡이 · 흙받이 · 발판 고무 · 전조등
   bake(g);
   th.home = [sp.x, sp.z, rot]; th.away = 0;
   const park = (x, z, r) => { th.x = th.ux = x; th.z = th.uz = z; th.fp[0].x = x; th.fp[0].z = z; g.position.set(x, 0, z); g.rotation.set(0, r, 0.12); if (th.sign) th.sign.position.set(x, th.signY, z); };
@@ -931,6 +965,7 @@ function buildFire(sp) {
   const th = thing('fire', '🎆', sp.x, sp.z, { verb: '누르기', useR: 2.0, solidR: 0.4, fp: [{ x: sp.x, z: sp.z, r: 0.9 }] });
   const g = grp(sp.x, sp.z, 0); th.g = g; th.objs.push(g);
   cyl(0.36, 0.44, 0.9, 0x343a40, 0, 0.45, 0, g, 14); cyl(0.42, 0.42, 0.08, 0xffd43b, 0, 0.94, 0, g, 14);
+  cyl(0.6, 0.66, 0.1, 0x495057, 0, 0.05, 0, g, 16); for (let i = 0; i < 10; i++) sph(0.055, i % 2 ? 0xffd43b : 0x212529, Math.cos(i * PI / 5) * 0.45, 0.5, Math.sin(i * PI / 5) * 0.45, g); for (const s of [-1, 1]) { const tb = cyl(0.07, 0.09, 0.5, 0xe03131, s * 0.75, 0.3, -0.2, g, 8); tb.rotation.z = -s * 0.2; cone(0.07, 0.14, 0xffd43b, s * 0.8, 0.6, -0.2, g, 8).rotation.z = -s * 0.2; } // 받침 · 경고 구슬 · 폭죽 통
   bake(g);
   const btn = add(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 0.16, 16), new THREE.MeshStandardMaterial({ color: 0xe03131, emissive: 0xc92a2a, emissiveIntensity: 0.5, roughness: 0.4 })), 0, 1.05, 0, g);
   th.cd = 0; th.q = []; th.n = 0;
@@ -999,7 +1034,7 @@ function buildMake(sp, rot) {
 }
 
 // ================= 2차: 💎 보석으로 타기 · 영어로 말해야 타기 · 단원 놀이 =================
-// - 값은 fun.js 의 지갑(FUN.wallet / FUN.spend)에서 빠져요. 별·정답률·서버 기록은 건드리지 않아요.
+// - 값은 지금 가진 보석(fun.js 가 센 '모은 수 − 쓴 수', FUN.wallet / FUN.spend)에서 빠져요. 별·정답률·서버 기록은 건드리지 않아요.
 // - 영어 문장은 모두 그 단원 data.js(window.LESSON) 에서 꺼내 써요. 조립할 때는 교과서 문장의 한 부분만 바꿔 끼워요.
 const L = G.L || {};
 const S4 = (Array.isArray(L.sentences) ? L.sentences : []).filter(s => s && s.en && s.ko);
@@ -1012,14 +1047,14 @@ const SPEAK = G.speak || (window.__mp && window.__mp.speak) || (() => {});
 const LOCK = G.lock || (window.__mp && window.__mp.lock) || null;
 
 // ---------------- 💎 값 ----------------
-const PRICE = { plane: 8, bike: 4, scooter: 3, fire: 3, tramp: 2, swing: 2, build: 2, fountain: 1, balloon: 1, bell: 1 }; // 공 차기·벤치는 무료
-const PASS = { fountain: { n: 3 }, balloon: { n: 5 }, build: { n: 3 }, bell: { t: 40 }, tramp: { t: 60 } };        // 한 번 값을 내면 n번 / t초 (없으면 1번)
-const NAME = { plane: '비행기 타기', bike: '자전거 타기', scooter: '킥보드 타기', fire: '불꽃놀이', tramp: '트램펄린 뛰기', swing: '그네 타기', build: '만들기', fountain: '분수에 동전 던지기', balloon: '풍선 터뜨리기', bell: '종 치기' };
+const PRICE = { plane: 8, chest: 5, bike: 4, scooter: 3, fire: 3, tramp: 2, swing: 2, build: 2, kite: 2, fish: 2, fountain: 1, balloon: 1, bell: 1, hoop: 1 }; // 공 차기·벤치는 무료
+const PASS = { fountain: { n: 3 }, balloon: { n: 5 }, build: { n: 3 }, bell: { t: 40 }, tramp: { t: 60 }, kite: { t: 60 }, bench: { t: 120 }, ball: { t: 90 } };        // 한 번 값을 내면 n번 / t초 (없으면 1번)
+const NAME = { plane: '비행기 타기', bike: '자전거 타기', scooter: '킥보드 타기', fire: '불꽃놀이', tramp: '트램펄린 뛰기', swing: '그네 타기', build: '만들기', fountain: '분수에 동전 던지기', balloon: '풍선 터뜨리기', bell: '종 치기', kite: '연 날리기', fish: '낚시 연못', hoop: '농구 골대', chest: '보물 상자', bench: '벤치에 앉기', ball: '공 차기' };
 const funW = () => { const f = window.FUN; return f && typeof f.wallet === 'function' && typeof f.spend === 'function' ? f : null; };
 const wallet = () => { const f = funW(); return f ? f.wallet() : 1e9; }; // fun.js 가 없으면 값 없이 놀아요
 const pay = (n) => { const f = funW(); return !f || n <= 0 ? true : !!f.spend(n); };
 const hasPass = (th) => th.passN > 0 || th.passT > ST.t;
-const isFree = (th) => (!th.price && !th.challenge) || !!(th.freeNow && th.freeNow()) || (!th.themed && hasPass(th));
+const isFree = (th) => !!(th.freeNow && th.freeNow()) || (!th.themed && hasPass(th)); // 영어 관문은 모든 놀이에 있어요 (값이 0 이어도). 맞힌 뒤 이용권이 남아 있는 동안만 그냥 돼요
 const costText = (th) => isFree(th) ? '' : th.price > 0 ? ' · 💎' + th.price : ' · 🗣️';
 function needMore(price) {
   const k = Math.max(1, price - wallet()); let extra = '';
@@ -1047,12 +1082,12 @@ function tryUse(th) {
     fire('paid', { kind: th.kind, price }); th.use();
   };
   if (!ch || !LOCK) { go(); return true; } // 문제를 만들 수 없으면 값만 받아요
-  openGate({ title: th.emoji + ' ' + (th.name || NAME[th.kind] || ''), cost: price, specs: Array.isArray(ch) ? ch : [ch] }, go);
+  openGate({ title: th.emoji + ' ' + (th.name || NAME[th.kind] || ''), cost: price, specs: Array.isArray(ch) ? ch : [ch], ride: /^(plane|bike|scooter|swing|tramp|bus|carousel)$/.test(th.kind) }, go);
   return true;
 }
 
 // ---------------- 🗣️ 영어 관문 (자체 창: 별·정답률·기록과 상관없어요) ----------------
-const GATE = { el: null, open: false, specs: null, i: 0, onPass: null, wrong: 0, timers: [], btns: [], title: '', cost: 0, miss: false, done: false };
+const GATE = { el: null, open: false, specs: null, i: 0, onPass: null, timers: [], btns: [], title: '', cost: 0, done: false, ride: false };
 function gateEl() {
   if (GATE.el) return GATE.el;
   const st = document.createElement('style');
@@ -1074,7 +1109,11 @@ function gateEl() {
     + '#playGate .pgRow{display:flex;align-items:center;gap:10px;margin-top:10px;min-height:34px}'
     + '#playGate .pgSpk{border:0;background:#e7f5ff;color:#1d3557;border-radius:10px;padding:8px 12px;font-size:16px;font-family:inherit}'
     + '#playGate .pgHint{font-size:16px;color:#e76f51;flex:1}'
-    + '#playGate .pgHint.ok{color:#2b8a3e}'
+    + '#playGate .pgHint.ok{color:#2b8a3e}#playGate .pgHint.no{color:#e03131;font-size:18px}'
+    + '#playGate{background:linear-gradient(180deg,#fff8e6 0,#fff 64px);border-color:#1d3557;box-shadow:0 10px 0 rgba(29,53,87,.18),0 14px 34px rgba(0,0,0,.28)}'
+    + '#playGate .pgTitle{font-size:18px;padding:5px 14px;border-radius:999px;box-shadow:0 2px 0 #c2553b}#playGate .pgCost{background:#fff3bf;border:2px solid #ffd43b;border-radius:999px;font-size:14px}'
+    + '#playGate .pgCh .choice{border-radius:16px;box-shadow:0 3px 0 #d0d7e2;transition:transform .08s,box-shadow .08s}#playGate .pgCh .choice:active:not(:disabled){transform:translateY(3px);box-shadow:none}'
+    + '#playGate .pgCh .choice.right{box-shadow:0 3px 0 #2b8a3e}#playGate .pgCh .choice.wrong{box-shadow:0 3px 0 #e03131}#playGate .pgPic{background:#f1f8ff;border-radius:14px;padding:6px 12px;display:inline-block}'
     + '@keyframes pgGlow{0%,100%{filter:none}50%{filter:drop-shadow(0 0 10px #ffd43b) drop-shadow(0 0 4px #ffd43b) brightness(1.15)}}#nav.pgGlow{animation:pgGlow .64s 5}'
     + '@media (max-width:640px){#playGate .pgEn{font-size:21px}#playGate .pgPic{font-size:24px}#playGate .pgCh .choice{font-size:17px;flex-basis:100%}}';
   document.head.appendChild(st);
@@ -1094,7 +1133,7 @@ function sayAll(list, who) { // 차례로 읽어 줘요. 걸리는 시간(ms)을
   return at;
 }
 function openGate(o, onPass) {
-  gateEl(); Object.assign(GATE, { open: true, specs: o.specs, i: 0, onPass, title: o.title, cost: o.cost | 0, done: false });
+  gateEl(); Object.assign(GATE, { open: true, specs: o.specs, i: 0, onPass, title: o.title, cost: o.cost | 0, done: false, ride: !!o.ride });
   if (LOCK) LOCK(true);
   GATE.el.classList.add('show'); showStep(); fire('gate', { title: o.title });
 }
@@ -1107,21 +1146,24 @@ function closeGate(cancel) {
 }
 function showStep() {
   const d = GATE.el, q = (c) => d.querySelector(c), s = GATE.specs[GATE.i], n = GATE.specs.length;
-  GATE.wrong = 0; GATE.miss = false; GATE.done = false;
+  GATE.done = false;
   q('.pgTitle').textContent = GATE.title; q('.pgCost').textContent = GATE.cost ? '맞히면 💎 ' + GATE.cost + '개를 내고 해요' : '맞히면 할 수 있어요';
-  q('.pgTag').textContent = (s.tag || '') + (n > 1 ? ' (' + (GATE.i + 1) + '/' + n + ')' : '');
+  q('.pgTag').textContent = (s.tag || '') + (n > 1 ? ' (' + (GATE.i + 1) + '/' + n + ')' : '') + ' · 기회는 한 번!';
   const pic = q('.pgPic'); pic.innerHTML = s.pic || ''; pic.style.display = s.pic ? '' : 'none';
   const en = q('.pgEn'); en.classList.toggle('pgEar', !s.en && !!s.say); en.textContent = s.en || (s.say ? '🔊 잘 들어 보세요' : ''); en.style.display = s.en || s.say ? '' : 'none';
   q('.pgKo').innerHTML = s.ko || '';
-  const hint = q('.pgHint'); hint.textContent = ''; hint.classList.remove('ok');
+  const hint = q('.pgHint'); hint.textContent = ''; hint.classList.remove('ok', 'no');
   const spk = q('.pgSpk'); spk.style.display = s.say ? '' : 'none'; spk.textContent = s.again || '🔊 다시 듣기';
   const ch = q('.pgCh'); ch.textContent = ''; GATE.btns = [];
-  const wrongHit = (b) => {
-    G.beep('bad'); GATE.miss = true; GATE.wrong++;
-    hint.textContent = s.hint ? '💡 ' + s.hint : '💡 다시 골라 보세요';
-    if (s.qid) qMiss(s.qid, true);
-    if (b) { b.classList.add('wrong'); b.disabled = true; }
-    if (GATE.wrong >= 2) GATE.btns.forEach(x => { if (x.dataset.r) x.classList.add('nudge'); });
+  const wrongHit = (b) => { // 틀리면 이 도전은 끝: 정답을 잠깐 보여 주고 닫아요 (보석은 그대로)
+    if (GATE.done) return; GATE.done = true; G.beep('bad'); if (s.qid) qMiss(s.qid, true);
+    GATE.btns.forEach(x => { x.disabled = true; if (x.dataset.r) x.classList.add('right'); }); if (b) b.classList.add('wrong');
+    hint.classList.add('no'); hint.textContent = '❌ 아쉬워요! 정답: ' + (s.order ? s.order.join(' ') : s.right);
+    fire('fail', { title: GATE.title });
+    setTimeout(safe(() => {
+      if (!GATE.open) return; const ride = GATE.ride; closeGate(false);
+      G.toast('😢 아쉬워요! 이번에는 못 ' + (ride ? '탔어요' : '했어요') + '<br><small>보석은 그대로예요 · 다시 도전하려면 ' + eKey() + '</small>', 3200);
+    }), 2000);
   };
   if (s.order) { // 낱말 순서 맞추기
     const ans = document.createElement('div'); ans.className = 'orderAns'; ch.appendChild(ans);
@@ -1132,7 +1174,7 @@ function showStep() {
       b.onclick = safe(() => {
         if (GATE.done) return;
         if (w === s.order[idx]) { G.beep('get'); b.remove(); const c = document.createElement('span'); c.className = 'chip'; c.textContent = w; ans.appendChild(c); idx++; if (idx >= s.order.length) stepDone(s); }
-        else { wrongHit(null); b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 400); }
+        else { b.classList.add('wrong'); wrongHit(null); }
       });
       pool.appendChild(b); GATE.btns.push(b);
     });
@@ -1148,7 +1190,7 @@ function showStep() {
 }
 function stepDone(s) {
   GATE.done = true; GATE.btns.forEach(x => { x.disabled = true; }); G.beep('ok');
-  if (s.qid && !GATE.miss) qMiss(s.qid, false);
+  if (s.qid) qMiss(s.qid, false);
   const hint = GATE.el.querySelector('.pgHint'); hint.classList.add('ok'); hint.textContent = '✅ ' + (s.afterKo || '잘했어요!');
   const ms = s.after ? sayAll(s.after, s.whoAfter || '나') : 0; // 맞히면 그 문장을 소리 내어 읽어 줘요
   setTimeout(safe(() => {
@@ -1194,7 +1236,8 @@ function lessonQ() { // 돌아가며 내고, 틀린 문제는 곧 다시 나와�
   const qb = QB || (QB = qBank()); if (!qb.length) return null;
   const st = qState(); let q = null;
   if (st.miss.length && st.p % 2 === 1) q = qb.find(x => x.id === st.miss[0]) || null;
-  if (!q) { q = qb[(st.q | 0) % qb.length]; st.q = ((st.q | 0) + 1) % qb.length; }
+  if (!q || (q.id === st.last && qb.length > 1)) { q = qb[(st.q | 0) % qb.length]; st.q = ((st.q | 0) + 1) % qb.length; if (q.id === st.last && qb.length > 1) { q = qb[(st.q | 0) % qb.length]; st.q = ((st.q | 0) + 1) % qb.length; } }
+  st.last = q.id; // 바로 앞에 낸 문제는 연달아 내지 않아요
   st.p = (st.p | 0) + 1; qSave();
   return qSpec(q);
 }
@@ -1220,11 +1263,11 @@ function jumpMe() { if (P.jy <= 0 && (!ST.ride || roam(ST.ride))) { P.vy = 5.2; 
 const MATD = {};
 const matD = (c) => MATD[c] || (MATD[c] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, metalness: 0, side: THREE.DoubleSide }));
 const glow = (c, k) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k == null ? 0.6 : k, roughness: 0.5 });
-const cap = (r, len, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, r < 0.1 ? 3 : 5, r < 0.1 ? 8 : 12), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const cap = (r, len, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, r < 0.1 ? 2 : 3, r < 0.1 ? 7 : 10), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const cone = (r, h, c, x, y, z, parent, seg) => add(new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 14), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
-const tor = (R, r, c, x, y, z, parent, arc) => add(new THREE.Mesh(new THREE.TorusGeometry(R, r, R < 0.25 ? 6 : 8, R < 0.25 ? 14 : 22, arc || PI * 2), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const tor = (R, r, c, x, y, z, parent, arc) => add(new THREE.Mesh(new THREE.TorusGeometry(R, r, R < 0.25 ? 5 : 6, R < 0.25 ? 12 : 20, arc || PI * 2), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const ell = (r, sx, sy, sz, c, x, y, z, parent) => { const m = sph(r, c, x, y, z, parent); m.scale.set(sx, sy, sz); return m; };
-const lathe = (pts, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 20), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
+const lathe = (pts, c, x, y, z, parent) => add(new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), 16), typeof c === 'number' ? mat(c) : c), x, y, z, parent);
 const flatX = (m) => { m.rotation.z = PI / 2; return m; };  // 옆으로 눕히기 (x 축 방향)
 const flatZ = (m) => { m.rotation.x = PI / 2; return m; };  // 앞뒤로 눕히기 (z 축 방향)
 const EMS = {};
@@ -1937,9 +1980,9 @@ function freeNear(x, z, r0, r1) { // (x, z) 둘레의 걸을 수 있는 빈 자�
   for (let i = 0; i < 24; i++) { const a = Math.random() * PI * 2, d = r0 + Math.random() * (r1 - r0), px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d; if (!wallAt(px, pz) && reachAt(px, pz) && distAt(px, pz) > 0.4) return [px, pz]; }
   return null;
 }
-function buildCat(x, z, look, idx) {
-  const th = thing('cat', '🐱', x, z, { own: false, verb: '간식', useR: 2.8, themed: 1, price: 1, name: '고양이 간식 주기' });
-  const root = new THREE.Group(); root.scale.setScalar(1.4); scene.add(root); th.g = root; th.objs.push(root);
+const CATLOOKS = [{ c: 0xf4a340, c2: 0xd9780f, eye: 0x94d82d, belly: 1, socks: 1 }, { c: 0x495057, c2: 0x212529, eye: 0xffd43b, belly: 1, socks: 1, mask: 0 }]; // 0 = 주황 줄무늬, 1 = 회색
+function catBody(look) { // 고양이 모형 (앞이 +z, 바닥 y=0). 장면에는 넣지 않아요
+  const root = new THREE.Group(); root.scale.setScalar(1.4);
   const C = look.c, C2 = look.c2, W = 0xffffff;
   // 서 있는 몸
   const stand = dyn(root, 0, 0, 0); ell(0.2, 0.85, 0.8, 1.65, C, 0, 0.3, 0, stand); ell(0.15, 0.8, 0.7, 1, look.belly ? W : C, 0, 0.27, 0.22, stand); for (let i = 0; i < 3; i++) box(0.24, 0.03, 0.05, C2, 0, 0.445 - Math.abs(i - 1) * 0.012, -0.16 + i * 0.14, stand); flatZ(tor(0.13, 0.022, 0xe03131, 0, 0.36, 0.26, stand)).rotation.x = PI / 2 - 0.3; sph(0.03, 0xffd43b, 0, 0.27, 0.34, stand); bake(stand);
@@ -1954,10 +1997,27 @@ function buildCat(x, z, look, idx) {
   // 꼬리 (살랑살랑)
   const tail = dyn(root, 0, 0.36, -0.3); let tp = tail; for (let i = 0; i < 3; i++) { const sgm = dyn(tp, 0, i ? 0.13 : 0, 0); cap(0.034 - i * 0.004, 0.1, i === 2 ? C2 : C, 0, 0.065, 0, sgm); bake(sgm); sgm.rotation.x = i ? 0.35 : -0.9; tp = sgm; }
   const segs = []; { let q = tail.children[0]; while (q) { segs.push(q); q = q.children.find(c => c.isGroup); } }
+  const setPose = (s) => { const sitting = s === 'sit'; stand.visible = !sitting; sit.visible = sitting; if (sitting) { head.position.set(0, 0.58, 0.07); tail.position.set(0.05, 0.06, -0.2); tail.rotation.set(0, 0, 0); segs[0].rotation.set(-1.45, 0, 0.5); } else { head.position.set(0, 0.47, 0.33); tail.position.set(0, 0.36, -0.3); segs[0].rotation.set(-0.9, 0, 0); } };
+  return { root, stand, sit, head, tail, segs, legs, setPose };
+}
+function makeCat(skin) { // 다른 층(함께 하기)이 친구의 고양이를 그릴 때: 같은 모양의 새 고양이. group.userData.pose(t, 'walk' | 'run' | 'sit')
+  const M = catBody(CATLOOKS[skin === 1 ? 1 : 0]), g = new THREE.Group(); g.add(M.root); let cur = 'stand'; M.setPose('stand');
+  g.userData.skin = skin === 1 ? 1 : 0;
+  g.userData.pose = (t, mode) => {
+    const sitting = mode === 'sit', run = mode === 'run'; t = +t || 0;
+    if ((cur === 'sit') !== sitting) { cur = sitting ? 'sit' : 'stand'; M.setPose(cur); M.stand.rotation.x = 0; M.stand.position.y = 0; M.head.rotation.set(0, 0, 0); }
+    if (!sitting) { const ph = t * (run ? 22 : 9), sw = Math.sin(ph) * (run ? 0.9 : 0.45), bob = Math.abs(Math.sin(ph)) * (run ? 0.065 : 0.01); M.legs[0].rotation.x = sw; M.legs[3].rotation.x = sw; M.legs[1].rotation.x = -sw; M.legs[2].rotation.x = -sw; M.stand.rotation.x = run ? Math.sin(ph) * 0.12 : 0; M.stand.position.y = bob; M.head.position.y = 0.47 + bob; M.head.rotation.x = run ? -0.1 : 0; }
+    else { M.head.rotation.x = Math.sin(t * 1.3) * 0.06; M.head.rotation.z = Math.sin(t * 0.7) * 0.08; }
+    M.segs.forEach((s, i) => { if (i) { s.rotation.z = Math.sin(t * 5 + i * 0.9) * 0.4; s.rotation.x = 0.35; } });
+  };
+  return g;
+}
+function buildCat(x, z, look, idx) {
+  const th = thing('cat', '🐱', x, z, { own: false, verb: '간식', useR: 2.8, themed: 1, price: 1, name: '고양이 간식 주기' });
+  const { root, stand, sit, head, tail, segs, legs, setPose } = catBody(look); scene.add(root); th.g = root; th.objs.push(root);
   const heart = emoSprite('❤️', 0.3); heart.position.set(0, 0.95, 0.1); heart.visible = false; root.add(heart);
   const blob = noRay(new THREE.Mesh(new THREE.CircleGeometry(0.22, 12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false }))); blob.rotation.x = -PI / 2; blob.position.y = 0.02; root.add(blob);
-  const C0 = th.cat = { x, z, h: rnd() * 6.28, st: 'sit', t: 1 + idx * 2, tx: x, tz: z, tame: 0, meow: 6, ph: idx * 3, stuck: 0, hop: 0, hearts: '' };
-  const setPose = (s) => { const sitting = s === 'sit'; stand.visible = !sitting; sit.visible = sitting; if (sitting) { head.position.set(0, 0.58, 0.07); tail.position.set(0.05, 0.06, -0.2); tail.rotation.set(0, 0, 0); segs[0].rotation.set(-1.45, 0, 0.5); } else { head.position.set(0, 0.47, 0.33); tail.position.set(0, 0.36, -0.3); segs[0].rotation.set(-0.9, 0, 0); } };
+  const C0 = th.cat = { x, z, h: rnd() * 6.28, st: 'sit', t: 1 + idx * 2, tx: x, tz: z, tame: 0, meow: 6, ph: idx * 3, stuck: 0, hop: 0, hearts: '', skin: idx ? 1 : 0 };
   setPose('sit');
   // 한 걸음: 벽이면 옆으로 비켜 가요 (충돌 상자는 만들지 않아요)
   const step = (tx, tz, sp, dt) => {
@@ -2019,7 +2079,7 @@ function buildCat(x, z, look, idx) {
   return th;
 }
 function buildCats() {
-  const LOOKS = [{ c: 0xf4a340, c2: 0xd9780f, eye: 0x94d82d, belly: 1, socks: 1 }, { c: 0x495057, c2: 0x212529, eye: 0xffd43b, belly: 1, socks: 1, mask: 0 }], N = GR.N, put = [];
+  const LOOKS = CATLOOKS, N = GR.N, put = [];
   for (let k = 0; k < 2; k++) {
     let best = null, bs = -1e9;
     for (let j = 8; j < N - 8; j += 3) for (let i = 8; i < N - 8; i += 3) {
@@ -2030,6 +2090,340 @@ function buildCats() {
     if (best) { put.push(best); buildCat(best[0], best[1], LOOKS[k], k); }
   }
 }
+
+// ================= 3차: 놀이 더하기 (공통 넷 + 단원마다 하나씩 더) =================
+// ---------------- 🪁 연 날리기 ----------------
+function buildKite(sp) {
+  const th = thing('kite', '🪁', sp.x, sp.z, { verb: '날리기', useR: 2.4, fp: [{ x: sp.x, z: sp.z, r: 1.2 }], solidR: 0.4 });
+  const g = grp(sp.x, sp.z, Math.atan2(-sp.x, 6 - sp.z)); th.g = g; th.objs.push(g);
+  for (const s of [-1, 1]) { const p = cyl(0.04, 0.05, 1.7, 0xa1887f, s * 0.55, 0.82, 0, g, 8); p.rotation.z = -s * 0.2; } flatX(cap(0.04, 1.0, 0xa1887f, 0, 1.6, 0, g)); cyl(0.5, 0.55, 0.08, 0x8d6e63, 0, 0.04, 0, g, 14);
+  const mini = (x, c1, c2) => { const k = box(0.42, 0.42, 0.025, c1, x, 1.1, 0.05, g); k.rotation.z = PI / 4; k.scale.y = 1.25; box(0.02, 0.62, 0.03, c2, x, 1.1, 0.06, g); box(0.44, 0.02, 0.03, c2, x, 1.16, 0.06, g); for (let i = 0; i < 3; i++) ell(0.045, 1.4, 0.7, 0.5, [c2, 0xffffff, c2][i], x + (i % 2 ? 0.05 : -0.05), 0.7 - i * 0.13, 0.05, g); };
+  mini(-0.28, 0xe03131, 0xffd43b); mini(0.28, 0x1c7ed6, 0xffffff);
+  flatX(cyl(0.11, 0.11, 0.2, 0xdeb887, 0, 0.2, 0.35, g, 12)); for (const s of [-1, 1]) flatX(cyl(0.15, 0.15, 0.02, 0x8d6e63, s * 0.11, 0.2, 0.35, g, 12));
+  bake(g);
+  // 날아다니는 연
+  const k = new THREE.Group(); k.userData.dyn = 1; scene.add(k); th.objs.push(k); k.visible = false;
+  const C = pick([0xe03131, 0x7048e8, 0x12b886, 0xf08c00]);
+  const sail = box(1.0, 1.0, 0.03, C, 0, 0, 0, k); sail.rotation.z = PI / 4; sail.scale.y = 1.3; box(0.03, 1.75, 0.04, 0xfff3bf, 0, 0, 0.02, k); box(1.02, 0.03, 0.04, 0xfff3bf, 0, 0.2, 0.02, k); for (const s of [-1, 1]) sph(0.07, 0xffffff, s * 0.2, 0.25, 0.04, k); ell(0.12, 1.3, 0.5, 0.4, 0xffffff, 0, -0.05, 0.04, k);
+  bake(k);
+  const tails = [0, 1, 2, 3].map(i => { const t = ell(0.09, 1.5, 0.6, 0.3, [0xffd43b, 0xffffff, 0xffd43b, 0xffffff][i], 0, 0, 0, scene); t.visible = false; th.objs.push(t); return t; });
+  const line = add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 4), new THREE.MeshBasicMaterial({ color: 0xffffff })), 0, 0, 0, scene); line.visible = false; th.objs.push(line); noRay(line);
+  const K = th.k = { x: sp.x, y: 1.2, z: sp.z, on: false }, up = new THREE.Vector3(0, 1, 0), dv = new THREE.Vector3();
+  th.label = () => hasPass(th) ? null : '연 날리기 🪁';
+  th.use = () => { K.on = true; K.x = P.x; K.y = 1.6; K.z = P.z; G.beep([[523, .06], [784, .06], [1046, .1]]); tell('kite', '🪁 연이 하늘로 올라가요! 1분 동안 나를 따라 날아요', 3000); fire('use', { kind: 'kite' }); };
+  th.onHide = (on) => { if (on) K.on = false; };
+  th.tick = (dt, t) => {
+    const fly = K.on && hasPass(th);
+    if (K.on && !fly) { K.on = false; G.toast('🪁 연이 내려왔어요', 1600); }
+    k.visible = fly; line.visible = fly; tails.forEach(q => { q.visible = fly; });
+    if (!fly) return;
+    const h = P.yaw, tx = P.x + Math.sin(h) * 3.2 + Math.sin(t * 0.7) * 1.4, ty = 6.2 + Math.sin(t * 1.1) * 0.6, tz = P.z + Math.cos(h) * 3.2 + Math.cos(t * 0.5) * 1.2, q = Math.min(1, dt * 1.4);
+    K.x += (tx - K.x) * q; K.y += (ty - K.y) * q; K.z += (tz - K.z) * q;
+    k.position.set(K.x, K.y, K.z); k.rotation.set(-0.5 + Math.sin(t * 1.7) * 0.1, Math.atan2(P.x - K.x, P.z - K.z), Math.sin(t * 2.3) * 0.18);
+    tails.forEach((m, i) => { m.position.set(K.x + Math.sin(t * 3 + i) * 0.14, K.y - 1.25 - i * 0.3, K.z + Math.cos(t * 2.4 + i) * 0.12); });
+    const hx = P.x, hy = P.jy + 1.25, hz = P.z; dv.set(K.x - hx, K.y - 0.9 - hy, K.z - hz); const len = dv.length();
+    line.position.set(hx + dv.x / 2, hy + dv.y / 2, hz + dv.z / 2); line.scale.set(1, len, 1); line.quaternion.setFromUnitVectors(up, dv.normalize());
+  };
+  return th;
+}
+// ---------------- 🎣 낚시 연못 ----------------
+const FISH = [['금붕어', 0xff922b, 1], ['파랑 물고기', 0x339af0, 0.9], ['노랑 물고기', 0xffd43b, 0.8], ['큰 잉어', 0xe03131, 1.5]];
+function buildPond(sp) {
+  const th = thing('fish', '🎣', sp.x, sp.z, { verb: '낚시', useR: 3.9, fp: [{ x: sp.x, z: sp.z, r: 2.5 }], solidR: 2.05 });
+  const rot = Math.atan2(-sp.x, 6 - sp.z), g = grp(sp.x, sp.z, rot); th.g = g; th.objs.push(g); const fx = Math.sin(rot), fz = Math.cos(rot);
+  cyl(2.35, 2.45, 0.1, 0xc9b28a, 0, 0.05, 0, g, 28);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * PI * 2 + 0.2, r = 2.15 + (i % 3) * 0.08; ell(0.26 + (i % 3) * 0.06, 1.2, 0.6, 0.9, [0x868e96, 0xadb5bd, 0x495057][i % 3], Math.cos(a) * r, 0.14, Math.sin(a) * r, g).rotation.y = a; }
+  for (const [a, n] of [[2.3, 4], [4.0, 3], [5.4, 4]]) for (let i = 0; i < n; i++) { const x = Math.cos(a + i * 0.09) * 1.85, z = Math.sin(a + i * 0.09) * 1.85, h = 0.8 + (i % 2) * 0.35; cyl(0.018, 0.022, h, 0x5c940d, x, h / 2, z, g, 5); cap(0.035, 0.14, 0x7b4a2d, x, h + 0.05, z, g); }
+  for (const [x, z, s] of [[-0.8, -0.5, 1], [0.7, -0.9, 0.8], [0.3, 0.6, 0.7]]) { cyl(0.3 * s, 0.3 * s, 0.02, 0x40c057, x, 0.125, z, g, 12); if (s > 0.75) { sph(0.07, 0xff8fab, x + 0.05, 0.18, z, g); sph(0.035, 0xffd43b, x + 0.05, 0.23, z, g); } }
+  for (let i = 0; i < 4; i++) box(0.9, 0.06, 0.24, i % 2 ? 0xb08968 : 0xa1887f, 0, 0.2, 1.55 + i * 0.26, g); for (const s of [-1, 1]) for (const z of [1.5, 2.3]) cyl(0.05, 0.05, 0.4, 0x6d4c41, s * 0.4, 0.15, z, g, 6);
+  bake(g);
+  const water = cyl(2.05, 2.05, 0.02, new THREE.MeshStandardMaterial({ color: 0x4dabf7, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 }), 0, 0.115, 0, g, 28); water.userData.ns = 1;
+  const rod = dyn(g, 0.3, 0.3, 2.2); cap(0.018, 1.9, 0x8d6e63, 0, 0.95, 0, rod); rod.rotation.x = -0.9; rod.visible = false; bake(rod);
+  const flt = new THREE.Group(); flt.userData.dyn = 1; sph(0.07, 0xe03131, 0, 0.03, 0, flt); sph(0.066, 0xffffff, 0, -0.02, 0, flt); cyl(0.008, 0.008, 0.16, 0x212529, 0, 0.1, 0, flt, 4); bake(flt); flt.visible = false; scene.add(flt); th.objs.push(flt);
+  const rip = noRay(new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }))); rip.rotation.x = -PI / 2; rip.visible = false; rip.userData.camBig = 0; scene.add(rip); th.objs.push(rip);
+  const fish = FISH.map(f => { const m = new THREE.Group(); m.userData.dyn = 1; ell(0.16, 0.6, 0.8, 1.5, f[1], 0, 0, 0, m); const tl = cone(0.11, 0.2, f[1], 0, 0, -0.3, m, 4); tl.rotation.x = PI / 2; tl.scale.x = 0.3; ell(0.07, 0.3, 1, 1.2, 0xffffff, 0, -0.03, 0.05, m); const fn = cone(0.06, 0.12, f[1], 0, 0.14, 0, m, 4); fn.scale.x = 0.3; for (const s of [-1, 1]) { sph(0.028, 0xffffff, s * 0.075, 0.03, 0.17, m); sph(0.014, 0x212529, s * 0.09, 0.03, 0.185, m); } bake(m); m.scale.setScalar(f[2] * 1.5); m.visible = false; scene.add(m); th.objs.push(m); return m; });
+  th.label = () => th.busy > 0 ? null : '낚시하기 🎣';
+  th.use = () => {
+    th.busy = 6.5; const i = rndI(FISH.length), f = FISH[i], m = fish[i], c = [sp.x + (Math.random() - 0.5) * 1.6, 0.16, sp.z + (Math.random() - 0.5) * 1.6], a = [sp.x + fx * 2.1, 1.5, sp.z + fz * 2.1];
+    rod.visible = true; G.beep([[700, .04], [500, .06]]);
+    toss(flt, a, c, 0.7, 1.2, () => { G.beep([[1300, .03], [600, .05]]); rip.position.set(c[0], 0.14, c[2]); rip.visible = true; tw(3, k => { flt.position.y = 0.16 + Math.sin(k * 30) * 0.03 - (k > 0.85 ? 0.12 : 0); const u = (k * 3) % 1; rip.scale.setScalar(0.2 + u * 0.9); rip.material.opacity = 0.7 * (1 - u); }, () => {
+      rip.visible = false; flt.visible = false; burst(c[0], 0.4, c[2], { n: 20, sp: 3.5, life: 0.8, size: 0.3, cols: [0xd0ebff, 0xffffff, 0x74c0fc], g: 9 }); G.beep('combo');
+      const b = front(1.0, 1.35); m.rotation.set(0, P.yaw + PI / 2, 0); toss(m, c, b, 0.8, 1.6, () => { tw(1.6, k => { m.rotation.z = Math.sin(k * 40) * 0.35; m.position.y = b[1] + Math.sin(k * 20) * 0.04; }, () => { toss(m, b, c, 0.6, 1.0, () => { m.visible = false; rod.visible = false; burst(c[0], 0.3, c[2], { n: 10, sp: 2, life: 0.5, size: 0.25, cols: [0xd0ebff, 0xffffff], g: 8 }); }); }); });
+      DAY.fish = (DAY.fish | 0) + 1; saveDay(); tell('fish', '🎣 ' + f[0] + '를 잡았어요! <small>(오늘 ' + DAY.fish + '마리째)</small><br><small>물고기는 다시 놓아줘요</small>', 3200); fire('use', { kind: 'fish' });
+    }); });
+  };
+  return th;
+}
+// ---------------- 🏀 농구 골대 ----------------
+function buildHoop(sp) {
+  const th = thing('hoop', '🏀', sp.x, sp.z, { verb: '던지기', useR: 3.6, fp: [{ x: sp.x, z: sp.z, r: 2.0 }] });
+  const rot = Math.atan2(-sp.x, 6 - sp.z), g = grp(sp.x, sp.z, rot); th.g = g; th.objs.push(g); const fx = Math.sin(rot), fz = Math.cos(rot);
+  cyl(1.9, 1.9, 0.04, 0xe8590c, 0, 0.025, 0.4, g, 26); cyl(1.7, 1.7, 0.045, 0xffa94d, 0, 0.027, 0.4, g, 26); box(1.2, 0.05, 0.06, 0xffffff, 0, 0.05, 1.3, g);
+  cyl(0.5, 0.56, 0.18, 0x343a40, 0, 0.09, -1.2, g, 14); cyl(0.07, 0.09, 3.3, 0x495057, 0, 1.7, -1.2, g, 10); const arm = cap(0.05, 0.6, 0x495057, 0, 3.25, -0.95, g); arm.rotation.x = PI / 2;
+  box(1.5, 1.0, 0.06, 0xffffff, 0, 3.3, -0.62, g); for (const [w, h, x, y] of [[0.56, 0.04, 0, 3.32], [0.56, 0.04, 0, 2.98], [0.04, 0.38, -0.26, 3.15], [0.04, 0.38, 0.26, 3.15]]) box(w, h, 0.07, 0xe03131, x, y, -0.6, g); for (const s of [-1, 1]) box(0.05, 1.0, 0.07, 0xe03131, s * 0.73, 3.3, -0.62, g);
+  flatZ(tor(0.26, 0.022, 0xff6b00, 0, 2.95, -0.3, g));
+  bake(g);
+  const net = noRay(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.16, 0.42, 10, 3, true), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.85 }))); net.position.set(0, 2.73, -0.3); net.userData.camBig = 0; g.add(net);
+  const ball = new THREE.Group(); ball.userData.dyn = 1; sph(0.17, 0xe8731c, 0, 0, 0, ball); tor(0.171, 0.008, 0x3a2a1a, 0, 0, 0, ball); flatZ(tor(0.171, 0.008, 0x3a2a1a, 0, 0, 0, ball)); bake(ball); ball.visible = false; scene.add(ball); th.objs.push(ball);
+  const W = (lx, ly, lz) => [sp.x + lx * fz + lz * fx, ly, sp.z - lx * fx + lz * fz], rim = W(0, 2.95, -0.3);
+  th.label = () => th.busy > 0 ? null : '농구공 던지기 🏀';
+  th.use = () => {
+    th.busy = 5.2; let made = 0;
+    for (let i = 0; i < 3; i++) later(0.2 + i * 1.5, () => { const ok = i === 2 || Math.random() < 0.7, to = ok ? rim : W(i % 2 ? 0.34 : -0.34, 3.05, -0.36);
+      G.beep([[300, .04]]); toss(ball, front(0.5, 1.6), to, 0.9, 1.9, () => { if (ok) { made++; G.beep([[880, .05], [1318, .09]]); tw(0.5, k => { net.scale.set(1 + Math.sin(k * PI) * 0.25, 1 + Math.sin(k * PI) * 0.2, 1 + Math.sin(k * PI) * 0.25); }); toss(ball, to, W(0, 0.2, -0.2), 0.45, 0, () => { ball.visible = false; }); emo('🏀', rim[0], 3.5, rim[2], 0.6); } else { G.beep([[220, .06], [180, .06]]); toss(ball, to, W(i % 2 ? 1.6 : -1.6, 0.2, 0.6), 0.6, 0.6, () => { ball.visible = false; }); } tw(0.9, k => { ball.rotation.x = -k * 9; }); });
+    });
+    later(4.9, () => tell('hoop', '🏀 3개 중 ' + made + '개 성공!' + (made === 3 ? ' 대단해요 🎉' : ''), 2600)); fire('use', { kind: 'hoop' });
+  };
+  return th;
+}
+// ---------------- 👑 보물 상자 → 오늘의 장식 (내 캐릭터 머리에) ----------------
+const DECO = [['crown', '왕관', '👑'], ['tophat', '마술사 모자', '🎩'], ['ribbon', '큰 리본', '🎀'], ['halo', '반짝 고리', '😇'], ['flower', '꽃 머리띠', '🌸']];
+function decoModel(id) {
+  const g = new THREE.Group(); g.userData.dyn = 1; g.userData.playDeco = id;
+  if (id === 'crown') { const gold = 0xffd43b; add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.19, 0.11, 14, 1, true), mat(gold)), 0, 0.31, 0, g); for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; cone(0.05, 0.13, gold, Math.cos(a) * 0.185, 0.42, Math.sin(a) * 0.185, g, 4); sph(0.026, [0xe03131, 0x339af0, 0x51cf66][i % 3], Math.cos(a) * 0.2, 0.32, Math.sin(a) * 0.2, g); } }
+  else if (id === 'tophat') { cyl(0.32, 0.32, 0.025, 0x212529, 0, 0.27, 0, g, 18); cyl(0.19, 0.2, 0.3, 0x212529, 0, 0.42, 0, g, 16); flatZ(tor(0.2, 0.02, 0xe03131, 0, 0.3, 0, g)); }
+  else if (id === 'ribbon') { for (const s of [-1, 1]) { ell(0.13, 1.3, 0.9, 0.5, 0xff8fab, s * 0.15, 0.33, 0.02, g).rotation.z = s * 0.5; ell(0.07, 0.7, 1.5, 0.4, 0xf06595, s * 0.08, 0.2, 0.06, g).rotation.z = -s * 0.3; } sph(0.06, 0xf06595, 0, 0.32, 0.03, g); }
+  else if (id === 'halo') { const h = flatZ(tor(0.2, 0.028, glow(0xffe066, 0.9), 0, 0.5, 0, g)); h.userData.ns = 1; for (let i = 0; i < 3; i++) sph(0.03, 0xffffff, Math.cos(i * 2.1) * 0.3, 0.52, Math.sin(i * 2.1) * 0.3, g); }
+  else { flatZ(tor(0.27, 0.02, 0x40c057, 0, 0.16, 0, g)).rotation.x = PI / 2 - 0.25; for (let i = 0; i < 7; i++) { const a = -0.3 + i / 6 * (PI + 0.6); sph(0.055, [0xff8fab, 0xffd43b, 0xffffff, 0xda77f2][i % 4], Math.cos(a) * 0.27, 0.19 + Math.sin(a) * 0.07, Math.sin(a) * 0.27 * 0.25 + 0.02, g); } for (let i = 0; i < 7; i++) { const a = -0.3 + i / 6 * (PI + 0.6); sph(0.02, 0xffe066, Math.cos(a) * 0.3, 0.19 + Math.sin(a) * 0.075, 0.05, g); } }
+  bake(g); return g;
+}
+function decoTick() { // 캐릭터가 새로 만들어져도(꾸미기 바꾸기 등) 다시 달아 줘요
+  const g = CAM.me, a = g && g.userData.anim, want = ST.mask || DAY.deco || null; if (!a || !a.headG) return;
+  const cur = a.headG.children.find(c => c.userData && c.userData.playDeco);
+  if (cur && cur.userData.playDeco === want) return;
+  if (cur) a.headG.remove(cur);
+  if (want) a.headG.add(want === 'mask' && ST.maskM ? ST.maskM : decoModel(want));
+}
+function buildChest(sp) {
+  const th = thing('chest', '👑', sp.x, sp.z, { verb: '열기', useR: 2.4, fp: [{ x: sp.x, z: sp.z, r: 1.3 }], solidR: 0.6 });
+  const g = grp(sp.x, sp.z, Math.atan2(-sp.x, 6 - sp.z)); th.g = g; th.objs.push(g);
+  cyl(1.1, 1.2, 0.12, 0x7048e8, 0, 0.06, 0, g, 20); cyl(0.95, 0.95, 0.03, 0xffd43b, 0, 0.13, 0, g, 20);
+  box(1.1, 0.55, 0.7, 0x8d5a2b, 0, 0.42, 0, g); for (const x of [-0.42, 0, 0.42]) box(0.1, 0.57, 0.72, 0xffd43b, x, 0.42, 0, g); box(1.12, 0.06, 0.72, 0xffd43b, 0, 0.17, 0, g); for (const s of [-1, 1]) flatX(tor(0.09, 0.02, 0xadb5bd, s * 0.57, 0.45, 0, g)).rotation.y = PI / 2;
+  bake(g);
+  const lid = dyn(g, 0, 0.7, -0.35); flatX(cyl(0.35, 0.35, 1.1, 0x9c6b3f, 0, 0, 0.35, lid, 16)).scale.set(0.75, 1, 1); for (const x of [-0.42, 0, 0.42]) flatX(cyl(0.36, 0.36, 0.1, 0xffd43b, x, 0, 0.35, lid, 16)).scale.set(0.75, 1, 1); box(0.16, 0.2, 0.06, 0xffd43b, 0, -0.04, 0.72, lid); sph(0.035, 0x212529, 0, -0.05, 0.75, lid); bake(lid);
+  const gl = noRay(new THREE.Sprite(new THREE.SpriteMaterial({ map: G.haloTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }))); gl.position.set(0, 0.9, 0); gl.scale.set(0.01, 0.01, 1); g.add(gl);
+  th.open = 0; th.want = 0;
+  th.label = () => th.busy > 0 ? null : '보물 상자 열기 👑';
+  th.use = () => {
+    th.busy = 5; th.want = 1; const opts = DECO.filter(d => d[0] !== DAY.deco), d = opts[rndI(opts.length)], w = [sp.x, 1.3, sp.z];
+    G.beep('fanfare'); later(0.5, () => { burst(w[0], w[1], w[2], { n: 30, sp: 4, life: 1.3, size: 0.38, cols: [0xffd43b, 0xffffff, 0xff8fab, 0x74c0fc], g: 4 }); emo(d[2], w[0], 1.6, w[2], 1.0); DAY.deco = d[0]; saveDay(); decoTick(); });
+    later(4.2, () => { th.want = 0; });
+    tell('chest', '👑 보물 상자에서 <b>' + d[1] + '</b> ' + d[2] + ' 이(가) 나왔어요!<br><small>오늘 하루 내 캐릭터가 쓰고 다녀요</small>', 3600); fire('use', { kind: 'chest', deco: d[0] });
+  };
+  th.tick = (dt, t) => { th.open += (th.want - th.open) * Math.min(1, dt * 4); lid.rotation.x = -th.open * 1.25; const s = th.open * 2.2 + (th.busy <= 0 ? 0.5 + Math.sin(t * 3) * 0.12 : 0); gl.scale.set(s, s, 1); };
+  return th;
+}
+
+// ---------------- 단원 놀이 하나씩 더 (그 단원 data.js 의 표현으로) ----------------
+const THEME3 = {};
+// L1 · 세계 친구 깃발 (어느 나라에서 왔는지 듣기)
+THEME3[1] = () => {
+  const KO = { Korea: '한국', France: '프랑스', India: '인도' }, ws = Object.values(L.world || {}).filter(w => w && w.country && w.lines && w.lines[0] && KO[w.country]);
+  if (ws.length < 3) return;
+  const th = mkStation('flags', '🚩', '세계 친구 깃발', 2.2, { verb: '올리기' }); if (!th) return; const g = th.g;
+  cyl(2.0, 2.1, 0.14, 0x74c0fc, 0, 0.07, 0, g, 26); cyl(1.8, 1.8, 0.04, 0xe7f5ff, 0, 0.15, 0, g, 26);
+  const X = [-1.2, 0, 1.2]; X.forEach(x => { cyl(0.045, 0.06, 3.4, 0xced4da, x, 1.85, -0.4, g, 8); sph(0.09, 0xffd43b, x, 3.6, -0.4, g); cyl(0.2, 0.24, 0.12, 0x868e96, x, 0.2, -0.4, g, 10); });
+  sph(0.5, 0x4dabf7, 0, 0.62, 0.9, g); for (const [a, b] of [[0.5, 0.4], [2.2, 0.1], [4.1, 0.5], [5.2, -0.3]]) { const m = ell(0.2, 1, 1, 0.3, 0x51cf66, Math.cos(b) * Math.cos(a) * 0.47, 0.62 + Math.sin(b) * 0.47, 0.9 + Math.cos(b) * Math.sin(a) * 0.47, g); m.rotation.order = 'YXZ'; m.rotation.y = Math.atan2(Math.cos(a), Math.sin(a)); m.rotation.x = -b; } cyl(0.2, 0.3, 0.14, 0x8d6e63, 0, 0.2, 0.9, g, 10);
+  bake(g);
+  const mkFlag = (c) => { const f = new THREE.Group(); f.userData.dyn = 1;
+    if (c === 'France') [0x1c4fb0, 0xffffff, 0xe03131].forEach((k, i) => box(0.3, 0.6, 0.03, k, 0.15 + i * 0.3, 0, 0, f));
+    else if (c === 'India') { [0xff9933, 0xffffff, 0x138808].forEach((k, i) => box(0.9, 0.2, 0.03, k, 0.45, 0.2 - i * 0.2, 0, f)); for (const z of [-1, 1]) flatZ(cyl(0.07, 0.07, 0.035, 0x1c2f80, 0.45, 0, 0, f, 12)); }
+    else { box(0.9, 0.6, 0.03, 0xffffff, 0.45, 0, 0, f); flatZ(cyl(0.15, 0.15, 0.04, 0xe03131, 0.45, 0.03, 0, f, 16)); flatZ(cyl(0.11, 0.11, 0.045, 0x1c4fb0, 0.45, -0.05, 0, f, 16)); for (const [x, y] of [[0.14, 0.18], [0.76, 0.18], [0.14, -0.18], [0.76, -0.18]]) box(0.14, 0.035, 0.04, 0x212529, x, y, 0, f).rotation.z = (x < 0.4 ? 1 : -1) * (y > 0 ? 1 : -1) * 0.6; }
+    bake(f); return f; };
+  const fl = ws.slice(0, 3).map((w, i) => { const f = mkFlag(w.country); f.position.set(X[i] + 0.05, 1.3, -0.4); g.add(f); return f; });
+  addSign(th, 4.3);
+  th.challenge = () => { const i = pickI(th, 3), w = th.cur = ws[i]; th.ci = i; return { tag: '듣고 고르기', pic: '🚩🌍', ko: '친구가 어느 나라에서 왔는지 잘 듣고 골라요', say: [[w.lines[0][0], w.name]], choices: ws.slice(0, 3).map(x => KO[x.country]), keep: true, right: KO[w.country], after: [w.lines[0][0]], afterKo: w.lines[0][1] }; };
+  th.use = () => { th.busy = 3.5; th.up = th.ci | 0; tune([523, 659, 784, 1046, 784, 1046], 0.2); const w = th.W(X[th.up] + 0.5, 3.9, -0.4); later(1.2, () => burst(w[0], w[1], w[2], { n: 14, sp: 2.4, life: 0.9, size: 0.3, cols: [0xffd43b, 0xffffff], g: 2 })); cheer(th, null, '🚩 ' + esc(KO[th.cur.country]) + ' 친구의 깃발을 올렸어요', 2800); };
+  th.tick = (dt) => { fl.forEach((f, i) => { f.position.y += ((th.up === i ? 3.15 : 1.3) - f.position.y) * Math.min(1, dt * 2.2); }); };
+};
+// L2 · 손님 식탁 (주문 듣고 음식 가져다주기)
+THEME3[2] = () => {
+  const cf = (L.comicFoods || []).filter(f => Array.isArray(f) && f[0] && f[1]), cu = (L.customers || []).filter(c => c && c.name && cf.some(f => f[0].indexOf(c.food) >= 0)), fo = L.foods || [], oq = S4[0];
+  const order = (f) => swap(S4[1] && S4[1].en, 'a beef steak', f[0]); if (cu.length < 3 || !oq || !order(cf[0])) return;
+  const th = mkStation('serve', '🧑‍🍳', '손님 식탁', 2.1, { solid: 0.9, verb: '서빙' }); if (!th) return; const g = th.g;
+  cyl(1.0, 1.0, 0.07, 0xffffff, 0, 0.84, 0, g, 24); lathe([[1.0, 0.82], [1.07, 0.55], [1.03, 0.42]], 0xe03131, 0, 0, 0, g); cyl(0.1, 0.14, 0.84, 0xa1887f, 0, 0.42, 0, g, 10); cyl(0.5, 0.55, 0.06, 0xa1887f, 0, 0.03, 0, g, 14);
+  cyl(0.04, 0.05, 0.14, 0x74c0fc, 0.5, 0.94, -0.3, g, 8); sph(0.07, 0xff8fab, 0.5, 1.07, -0.3, g); sph(0.05, 0xffd43b, 0.45, 1.1, -0.26, g);
+  cyl(0.36, 0.36, 0.07, 0x8d6e63, 0, 0.5, -1.2, g, 16); cyl(0.05, 0.05, 0.5, 0x6d4c41, 0, 0.25, -1.2, g, 8); const bk = cap(0.06, 0.6, 0x8d6e63, 0, 1.0, -1.55, g); bk.rotation.z = PI / 2; for (const s of [-1, 1]) cyl(0.035, 0.035, 0.55, 0x8d6e63, s * 0.28, 0.76, -1.55, g, 6);
+  bake(g);
+  const guest = dyn(g, 0, 0.55, -1.15); ell(0.24, 1, 1.15, 0.85, 0x4dabf7, 0, 0.3, 0, guest); sph(0.21, 0xf5cfa8, 0, 0.78, 0.02, guest); ell(0.22, 1.02, 0.7, 1, 0x5c4033, 0, 0.86, -0.03, guest); for (const s of [-1, 1]) { sph(0.028, 0x212529, s * 0.075, 0.79, 0.2, guest); cap(0.055, 0.2, 0x4dabf7, s * 0.26, 0.36, 0.12, guest).rotation.x = -0.9; } flatZ(tor(0.05, 0.012, 0xb5443f, 0, 0.7, 0.19, guest, PI)).rotation.x = PI; bake(guest);
+  addSign(th, 3.0);
+  const lab = (c) => { const f = fo.find(x => x.id === c.food) || {}; return (f.emoji || '🍽️') + ' ' + (f.ko || c.food); };
+  th.challenge = () => { const c = th.cur = cu[pickI(th, cu.length)], f = cf.find(x => x[0].indexOf(c.food) >= 0); th.cf = f; return { tag: '주문 듣기', pic: '🧑 ' + esc(c.name), en: oq.en, ko: '손님의 주문을 잘 듣고, 가져다줄 음식을 골라요', say: [[oq.en, 'Server'], [order(f), c.name]], choices: uniq(cu.map(lab)), right: lab(c), after: [order(f)] }; };
+  th.use = () => { th.busy = 5; const at = th.W(0, 0.92, -0.25), m = showFood(th.cf[0], th.W(0, 1.6, 1.2), 1.3); later(0.4, () => toss(m, [m.position.x, m.position.y, m.position.z], at, 0.6, 0.4, () => { G.beep([[659, .06], [880, .1]]); hop(guest, 0.2, 0.4, 0.55); const w = th.W(0, 2.1, -1.15); emo('😋', w[0], w[1], w[2], 0.7); })); later(5.5, () => scene.remove(m)); cheer(th, null, '🧑‍🍳 ' + esc(lab(th.cur)) + ' 나왔습니다! 손님이 좋아해요', 2800); };
+};
+// L3 · 따뜻한 찻집 (아픈 친구에게 해 줄 말)
+THEME3[3] = () => {
+  const wa = (L.writeAdvice || []).filter(a => Array.isArray(a) && a[0] && a[1]); if (wa.length < 4) return;
+  const th = mkStation('tea', '🫖', '따뜻한 찻집', 1.9, { solid: 0.8, verb: '차 따르기' }); if (!th) return; const g = th.g;
+  cyl(0.95, 0.95, 0.07, 0xdeb887, 0, 0.82, 0, g, 22); cyl(0.1, 0.14, 0.82, 0x8d6e63, 0, 0.41, 0, g, 10); cyl(0.5, 0.55, 0.06, 0x8d6e63, 0, 0.03, 0, g, 14); cyl(0.6, 0.6, 0.015, 0xffe3e3, 0, 0.865, 0, g, 20);
+  for (const [x, z] of [[0.45, 0.3], [-0.5, 0.25]]) { cyl(0.17, 0.13, 0.02, 0xffffff, x, 0.88, z, g, 12); cyl(0.1, 0.075, 0.12, 0xffffff, x, 0.95, z, g, 12); cyl(0.085, 0.085, 0.01, 0xc9743c, x, 1.0, z, g, 10); flatX(tor(0.045, 0.012, 0xffffff, x + 0.12, 0.95, z, g)).rotation.y = PI / 2; }
+  cyl(0.09, 0.09, 0.16, 0xffd43b, -0.2, 0.94, -0.45, g, 10); cyl(0.095, 0.095, 0.03, 0x8d6e63, -0.2, 1.03, -0.45, g, 10); ell(0.07, 1.2, 0.8, 0.8, 0xffe066, 0.35, 0.92, -0.42, g);
+  bake(g);
+  const pot = dyn(g, 0, 0.87, -0.05); lathe([[0.0, 0.0], [0.16, 0.0], [0.23, 0.1], [0.24, 0.2], [0.17, 0.32], [0.1, 0.35]], 0x74c0fc, 0, 0, 0, pot); ell(0.11, 1, 0.35, 1, 0x4dabf7, 0, 0.36, 0, pot); sph(0.035, 0xffd43b, 0, 0.42, 0, pot); const spt = cap(0.03, 0.2, 0x74c0fc, 0.27, 0.22, 0, pot); spt.rotation.z = -0.9; flatX(tor(0.09, 0.02, 0x4dabf7, -0.26, 0.2, 0, pot)).rotation.y = PI / 2; bake(pot);
+  addSign(th, 2.7);
+  th.challenge = () => { const a = th.cur = wa[pickI(th, wa.length)]; return { tag: '해 줄 말 고르기', pic: '🤒💬', ko: '아픈 친구에게 <b>「' + esc(a[1]) + '」</b> 하고 말해 주고 싶어요', choices: [a[0]].concat(others(wa.map(x => x[0]), a[0], 3)), right: a[0], after: [a[0]] }; };
+  th.use = () => { th.busy = 3.5; tw(2.2, k => { pot.rotation.z = -Math.sin(Math.min(1, k * 1.4) * PI) * 0.7; pot.position.y = 0.87 + Math.sin(k * PI) * 0.25; pot.position.x = Math.sin(k * PI) * 0.18; }, () => { pot.rotation.z = 0; }); for (let i = 0; i < 3; i++) later(0.6 + i * 0.5, () => { const w = th.W(0.45, 1.35, 0.3); emo(i === 2 ? '🍵' : '♨️', w[0], w[1], w[2], 0.6); G.beep([[520 + i * 60, .05], [400, .05]]); }); cheer(th, null, '🫖 따뜻한 차 한 잔! 친구가 고마워해요', 2600); };
+};
+// L4 · 열두 달 돌림판
+THEME3[4] = () => {
+  const mo = (L.months || []).filter(m => Array.isArray(m) && m[0] && m[1]); if (mo.length !== 12) return;
+  const th = mkStation('months', '🎡', '열두 달 돌림판', 2.0, { solid: 0.5, verb: '돌리기' }); if (!th) return; const g = th.g;
+  for (const s of [-1, 1]) { const p = cyl(0.07, 0.09, 2.5, 0xe8590c, s * 0.75, 1.15, -0.2, g, 8); p.rotation.z = s * 0.28; } cyl(0.9, 1.0, 0.12, 0x868e96, 0, 0.06, -0.2, g, 16); flatZ(cyl(0.1, 0.1, 0.5, 0xced4da, 0, 2.05, -0.1, g, 10));
+  const pt = cone(0.13, 0.3, 0xe03131, 0, 3.42, 0.08, g, 4); pt.rotation.x = PI; pt.scale.z = 0.4;
+  bake(g);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 512; const x = cv.getContext('2d'), COL = ['#74c0fc', '#a5d8ff', '#b2f2bb', '#8ce99a', '#d8f5a2', '#ffec99', '#ffd43b', '#ffa94d', '#ffc078', '#ffa8a8', '#e599f7', '#b197fc'];
+  for (let i = 0; i < 12; i++) { const a0 = -PI / 2 + (i - 0.5) * PI / 6; x.fillStyle = COL[i]; x.beginPath(); x.moveTo(256, 256); x.arc(256, 256, 250, a0, a0 + PI / 6); x.closePath(); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 4; x.stroke(); const am = a0 + PI / 12; x.save(); x.translate(256 + Math.cos(am) * 185, 256 + Math.sin(am) * 185); x.rotate(am + PI / 2); x.fillStyle = '#1d3557'; x.font = "bold 40px 'Jua','Malgun Gothic',sans-serif"; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(i + 1), 0, 0); x.restore(); }
+  x.fillStyle = '#fff'; x.beginPath(); x.arc(256, 256, 60, 0, 7); x.fill(); x.fillStyle = '#e8590c'; x.font = "bold 44px 'Jua','Malgun Gothic',sans-serif"; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('월', 256, 258);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
+  const wh = dyn(g, 0, 2.05, 0.12); const disc = noRay(new THREE.Mesh(new THREE.CircleGeometry(1.25, 36), new THREE.MeshBasicMaterial({ map: tx, toneMapped: false }))); disc.userData.camBig = 0; wh.add(disc); const rim = tor(1.25, 0.05, 0xffd43b, 0, 0, 0, wh); rim.userData.keep = 1; for (let i = 0; i < 12; i++) sph(0.05, 0xffffff, Math.cos(i * PI / 6) * 1.25, Math.sin(i * PI / 6) * 1.25, 0.03, wh);
+  const back = noRay(new THREE.Mesh(new THREE.CircleGeometry(1.25, 24), new THREE.MeshBasicMaterial({ color: 0xffe8cc }))); back.rotation.y = PI; back.position.z = -0.02; wh.add(back);
+  addSign(th, 4.0);
+  th.ang = 0; th.to = 0; const SE = ['⛄', '⛄', '🌸', '🌸', '🌸', '☀️', '☀️', '☀️', '🍁', '🍁', '🍁', '⛄'];
+  th.challenge = () => { const i = th.mi = pickI(th, 12), m = mo[i]; th.to = Math.ceil(th.ang / (PI * 2)) * PI * 2 + PI * 4 + i * PI / 6; tune([440, 494, 523, 587, 659], 0.12, 0.08); return { tag: '달 이름 말하기', pic: '📅 ' + esc(m[1]), ko: '돌림판이 멈춘 달을 영어로 골라요', choices: [m[0]].concat(others(mo.map(q => q[0]), m[0], 3)), right: m[0], after: [m[0]] }; };
+  th.use = () => { th.busy = 2.5; const w = th.W(0, 3.5, 0.2); burst(w[0], w[1], w[2], { n: 18, sp: 3, life: 1, size: 0.32, cols: [0xffd43b, 0xff8fab, 0x74c0fc], g: 3 }); emo(SE[th.mi | 0], w[0], w[1] + 0.3, w[2], 0.9); tune([659, 784, 1046], 0.14); cheer(th, null, '🎡 ' + esc(mo[th.mi | 0][0]) + ' = ' + esc(mo[th.mi | 0][1]), 2600); };
+  th.tick = (dt) => { th.ang += (th.to - th.ang) * Math.min(1, dt * 2.2); wh.rotation.z = th.ang; };
+};
+// L5 · 나무 심기 (We should …)
+THEME3[5] = () => {
+  const sh = (L.shoulds || []).filter(s => s && s.id && s.ko), we = (s) => swap(S4[2] && S4[2].en, 'save energy', s.id); if (sh.length < 3 || !we(sh[0])) return;
+  const th = mkStation('plant', '🌳', '나무 심기', 1.9, { solid: 0.7, verb: '심기' }); if (!th) return; const g = th.g;
+  cyl(0.95, 0.8, 0.5, 0xc9743c, 0, 0.25, 0, g, 18); flatZ(tor(0.95, 0.06, 0xb5632e, 0, 0.5, 0, g)); cyl(0.86, 0.86, 0.04, 0x6b4a2b, 0, 0.5, 0, g, 18);
+  lathe([[0.0, 0.0], [0.16, 0.0], [0.2, 0.08], [0.2, 0.3], [0.16, 0.33]], 0x4dabf7, 1.25, 0, 0.5, g); const sp0 = cap(0.025, 0.3, 0x4dabf7, 1.5, 0.24, 0.5, g); sp0.rotation.z = -0.9; flatX(tor(0.1, 0.02, 0x339af0, 1.02, 0.2, 0.5, g)).rotation.y = PI / 2;
+  bake(g);
+  const st = [dyn(g, 0, 0.52, 0), dyn(g, 0, 0.52, 0), dyn(g, 0, 0.52, 0)];
+  cyl(0.02, 0.025, 0.25, 0x51cf66, 0, 0.12, 0, st[0], 5); for (const s of [-1, 1]) ell(0.09, 1.4, 0.3, 0.7, 0x69db7c, s * 0.1, 0.26, 0, st[0]).rotation.z = s * 0.5;
+  cyl(0.05, 0.07, 0.9, 0x8d6e63, 0, 0.45, 0, st[1], 7); sph(0.34, 0x40c057, 0, 1.05, 0, st[1]); sph(0.22, 0x51cf66, 0.2, 1.25, 0.1, st[1]);
+  cyl(0.09, 0.13, 1.5, 0x7a5230, 0, 0.75, 0, st[2], 8); for (const [x, y, z, r] of [[0, 1.9, 0, 0.62], [0.45, 1.6, 0.15, 0.42], [-0.42, 1.65, -0.1, 0.45], [0.05, 2.35, 0.05, 0.38]]) sph(r, [0x2f9e44, 0x37b24d, 0x40c057][Math.round(r * 10) % 3], x, y, z, st[2]); for (let i = 0; i < 7; i++) sph(0.07, i % 2 ? 0xe03131 : 0xff8fab, Math.cos(i * 0.9) * 0.55, 1.65 + (i % 3) * 0.25, Math.sin(i * 0.9) * 0.5, st[2]);
+  st.forEach(s => { bake(s); s.visible = false; s.scale.setScalar(0.01); });
+  addSign(th, 3.6); th.n = 0;
+  th.label = () => th.busy > 0 ? null : th.n >= 3 ? '나무 다시 심기' : '나무 심기 (' + th.n + '/3)';
+  th.freeNow = () => th.n >= 3;
+  th.challenge = () => { const s = th.cur = sh[pickI(th, sh.length)]; return { tag: '해야 할 일 말하기', pic: esc(s.emoji || '🌱') + ' ' + esc(s.ko), ko: '지구를 위해 우리가 해야 할 일을 영어로 골라요', choices: sh.map(we), right: we(s), after: [we(s)] }; };
+  th.use = () => {
+    if (th.n >= 3) { th.n = 0; st.forEach(s => { s.visible = false; s.scale.setScalar(0.01); }); G.toast('🌱 새 씨앗을 심을 자리가 생겼어요', 1600); return; }
+    th.busy = 2.2; const s = st[th.n], w = th.W(0, 1.2, 0); st.forEach(q => { q.visible = false; }); s.visible = true; tw(0.9, k => s.scale.setScalar(Math.max(0.01, k + 0.25 * Math.sin(k * PI) * (1 - k))));
+    burst(w[0], w[1] + th.n * 0.5, w[2], { n: 12, sp: 2, life: 0.8, size: 0.26, cols: [0x74c0fc, 0xd0ebff], g: 8 }); G.beep([[392 + th.n * 130, .06], [523 + th.n * 150, .1]]); th.n++;
+    if (th.n >= 3) cheer(th, '🌳', '🌳 나무가 다 자랐어요! 지구가 시원해져요', 3000); else tell(null, '🌱 쑥쑥! 나무 ' + th.n + '/3', 1600);
+  };
+};
+// L6 · 탈춤 추기
+THEME3[6] = () => {
+  const cu = (L.cultures || []).filter(c => c && c.id && c.kind), c0 = cu.find(c => /talchum/i.test(c.id)), ask = (c) => swap(S4[0] && S4[0].en, 'yakgwa', c.id), its = (c) => swap(S4[2] && S4[2].en, 'cookie', c.kind), yes = S4[1];
+  if (!c0 || cu.length < 4 || !ask(c0) || !its(c0)) return;
+  const th = mkStation('talchum', '🎭', '탈춤 추기', 2.1, { verb: '춤추기' }); if (!th) return; const g = th.g;
+  cyl(1.9, 1.9, 0.05, 0xf8f0e3, 0, 0.03, 0, g, 26); flatZ(tor(1.9, 0.05, 0xc92a2a, 0, 0.05, 0, g)); flatZ(tor(1.2, 0.03, 0x1c7ed6, 0, 0.06, 0, g));
+  for (const s of [-1, 1]) cyl(0.05, 0.06, 2.0, 0x8d6e63, s * 1.0, 1.0, -1.3, g, 8); cap(0.045, 2.1, 0x8d6e63, 0, 1.95, -1.3, g).rotation.z = PI / 2;
+  const mask = (pp, c, cheek) => { ell(0.26, 0.9, 1.15, 0.35, c, 0, 0, 0, pp); for (const s of [-1, 1]) { ell(0.055, 1.5, 0.7, 0.5, 0x212529, s * 0.09, 0.07, 0.08, pp).rotation.z = s * 0.35; sph(0.06, cheek, s * 0.14, -0.07, 0.07, pp); cone(0.05, 0.14, c, s * 0.2, 0.26, 0, pp, 5).rotation.z = -s * 0.5; } const mo = tor(0.1, 0.022, 0xc92a2a, 0, -0.08, 0.09, pp, PI); mo.rotation.z = PI; ell(0.04, 1, 1.3, 1, c, 0, -0.01, 0.1, pp); };
+  [[-0.6, 0xffffff, 0xff8787], [0, 0xe03131, 0xffd43b], [0.6, 0x343a40, 0xff8787]].forEach(([x, c, k]) => { const m = dyn(g, x, 1.55, -1.27); mask(m, c, k); bake(m); });
+  bake(g);
+  const mm = new THREE.Group(); mm.userData.dyn = 1; mm.userData.playDeco = 'mask'; mask(mm, 0xffffff, 0xff8787); bake(mm); mm.position.set(0, 0, 0.3);
+  addSign(th, 3.0);
+  th.challenge = () => ({ tag: '전통 춤 설명하기', pic: esc(c0.emoji || '🎭') + ' ' + esc(c0.ko), en: ask(c0), ko: '무엇인지 영어로 설명해요', say: [ask(c0)], choices: [its(c0)].concat(others(cu.map(its), its(c0), 3)), right: its(c0), after: yes ? [yes.en, its(c0)] : [its(c0)] });
+  th.use = () => { th.busy = 6; ST.danceT = 5.5; ST.mask = 'mask'; ST.maskM = mm; decoTick(); [0, 0.5, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 3.25, 3.5, 4.0, 4.5, 5.0].forEach((t, i) => later(t, () => G.beep([[i % 3 ? 131 : 98, .18]]))); later(5.6, () => { ST.mask = null; decoTick(); }); cheer(th, null, '🎭 덩기덕 쿵더러러! 탈을 쓰고 춤춰요', 3000); };
+};
+// L7 · 팬케이크 쌓기 (얼마나 자주)
+THEME3[7] = () => {
+  const NUM = { once: 1, twice: 2, three: 3, four: 4, five: 5, six: 6, every: 7 }, wf = (L.writeFreq || []).filter(f => Array.isArray(f) && f[0] && f[1] && NUM[f[0].split(' ')[0]]); if (wf.length < 4) return;
+  const th = mkStation('pancake', '🥞', '팬케이크 쌓기', 1.9, { solid: 0.8, verb: '쌓기' }); if (!th) return; const g = th.g;
+  box(1.7, 0.85, 0.8, 0xffffff, 0, 0.43, -0.2, g); box(1.8, 0.07, 0.9, 0x495057, 0, 0.89, -0.2, g); for (const x of [-0.5, 0, 0.5]) flatZ(cyl(0.05, 0.05, 0.04, 0xe03131, x, 0.6, 0.21, g, 8));
+  cyl(0.3, 0.26, 0.05, 0x212529, -0.45, 0.95, -0.25, g, 16); const hd = cap(0.03, 0.4, 0x8d6e63, -0.45, 0.96, 0.22, g); hd.rotation.x = PI / 2;
+  cyl(0.36, 0.3, 0.03, 0xffffff, 0.42, 0.94, -0.2, g, 18); cyl(0.07, 0.09, 0.26, 0xc9743c, 0.78, 1.05, -0.5, g, 10); cone(0.06, 0.1, 0xffd43b, 0.78, 1.23, -0.5, g, 8);
+  bake(g);
+  const cakes = [0, 1, 2, 3, 4, 5, 6].map(i => { const c = new THREE.Group(); c.userData.dyn = 1; cyl(0.27, 0.27, 0.06, 0xe9b96e, 0, 0, 0, c, 16); flatZ(tor(0.27, 0.03, 0xd49a4a, 0, 0, 0, c)); bake(c); c.visible = false; scene.add(c); th.objs.push(c); return c; });
+  const top = new THREE.Group(); top.userData.dyn = 1; box(0.1, 0.05, 0.1, 0xffe066, 0, 0.03, 0, top); ell(0.2, 1, 0.12, 1, 0xb5632e, 0, 0, 0, top); sph(0.05, 0xe03131, 0.1, 0.05, 0.08, top); bake(top); top.visible = false; scene.add(top); th.objs.push(top);
+  addSign(th, 2.8);
+  th.challenge = () => { const f = th.cur = wf[pickI(th, wf.length)]; return { tag: '횟수 말하기', pic: '🗓️ ' + esc(f[1]), ko: '얼마나 자주인지 영어로 골라요', choices: [f[0]].concat(others(wf.map(q => q[0]), f[0], 3)), right: f[0], after: [f[0]] }; };
+  th.use = () => { const f = th.cur || wf[0], n = NUM[f[0].split(' ')[0]] || 1; th.busy = n * 0.4 + 2; cakes.forEach(c => { c.visible = false; }); top.visible = false;
+    for (let i = 0; i < n; i++) later(0.2 + i * 0.4, () => { const to = th.W(0.42, 0.99 + i * 0.07, -0.2); toss(cakes[i], th.W(-0.45, 1.05, -0.25), to, 0.35, 0.7, () => G.beep([[330 + i * 40, .05]])); emo(String(i + 1), to[0], to[1] + 0.6, to[2], 0.5); });
+    later(0.4 + n * 0.4, () => { const to = th.W(0.42, 0.99 + n * 0.07, -0.2); top.position.set(to[0], to[1], to[2]); top.visible = true; G.beep('get'); cheer(th, null, '🥞 팬케이크 ' + n + '장! <small>' + esc(f[0]) + ' = ' + esc(f[1]) + '</small>', 3000); });
+    later(9, () => { cakes.forEach(c => { c.visible = false; }); top.visible = false; }); };
+};
+// L8 · 표정 거울 (왜 그런지 물어보기)
+THEME3[8] = () => {
+  const fe = (L.feelings || []).filter(f => f && f.id && f.emoji), why = (f) => swap(S4[0] && S4[0].en, 'happy', f.id), cheerUp = S4[3]; if (fe.length < 4 || !why(fe[1])) return;
+  const th = mkStation('mirror', '🪞', '표정 거울', 1.8, { solid: 0.5, verb: '묻기' }); if (!th) return; const g = th.g;
+  cyl(0.7, 0.8, 0.12, 0x8d6e63, 0, 0.06, 0, g, 16); cyl(0.07, 0.1, 0.7, 0x8d6e63, 0, 0.45, 0, g, 8);
+  const fr = tor(0.75, 0.09, 0xffd43b, 0, 1.75, 0, g); fr.scale.set(1, 1.3, 1); for (let i = 0; i < 10; i++) { const a = i / 10 * PI * 2; sph(0.07, i % 2 ? 0xff8fab : 0xffffff, Math.cos(a) * 0.75, 1.75 + Math.sin(a) * 0.98, 0.06, g); } ell(0.16, 1.4, 0.8, 0.6, 0xffd43b, 0, 2.82, 0, g);
+  bake(g);
+  const glass = flatZ(cyl(0.72, 0.72, 0.03, new THREE.MeshStandardMaterial({ color: 0xd0ebff, roughness: 0.1, metalness: 0.4 }), 0, 1.75, -0.02, g, 28)); glass.scale.set(1, 1, 1.3);
+  const face = emoSprite(fe[0].emoji, 0.95); face.position.set(0, 1.75, 0.12); g.add(face);
+  addSign(th, 3.5);
+  th.challenge = () => { const f = th.cur = fe[pickI(th, fe.length)]; emoSet(face, f.emoji); return { tag: '이유 물어보기', pic: f.emoji + ' ' + esc(f.ko), ko: '거울 속 친구에게 왜 그런지 물어봐요', choices: [why(f)].concat(others(fe.map(why), why(f), 3)), right: why(f), after: [why(f)] }; };
+  th.use = () => { th.busy = 3; const w = th.W(0, 1.8, 0.3), f = th.cur || fe[0]; later(0.7, () => { emoSet(face, '😄'); burst(w[0], w[1], w[2], { n: 16, sp: 2.6, life: 0.9, size: 0.3, cols: [0xffd43b, 0xffffff, 0xff8fab], g: 1 }); if (f.id !== 'happy' && cheerUp) { try { SPEAK(cheerUp.en, 'Teacher'); } catch (e) {} } }); tune([523, 659, 784], 0.16); later(8, () => emoSet(face, f.emoji)); cheer(th, null, '🪞 ' + f.emoji + ' → 😄 친구의 마음을 물어봐 줬어요', 2800); };
+};
+
+// L9 · 야구 연습장 (할 일 말하기)
+THEME3[9] = () => {
+  const pl = (L.plans || []).filter(p => p && p.id), tm = (L.times || []).filter(t => t && t.id), p0 = pl.find(p => /baseball/.test(p.id)), bye = S4[3];
+  const what = (t) => swap(S4[0] && S4[0].en, 'tomorrow', t.id), going = (p) => swap(S4[1] && S4[1].en, 'walk the dog', p.id);
+  if (!p0 || !tm.length || pl.length < 4 || !what(tm[0]) || !going(p0)) return;
+  const th = mkStation('bat', '⚾', '야구 연습장', 2.6, { verb: '치기' }); if (!th) return; const g = th.g;
+  cyl(2.3, 2.3, 0.04, 0xc9a66b, 0, 0.025, 0, g, 28); cyl(0.5, 0.5, 0.045, 0xffffff, 0, 0.03, 1.3, g, 5); box(0.7, 0.05, 0.06, 0xffffff, 0, 0.05, -0.9, g);
+  box(0.6, 0.7, 0.6, 0x1c7ed6, 0, 0.5, -1.9, g); for (const s of [-1, 1]) flatX(cyl(0.3, 0.3, 0.14, 0x212529, s * 0.37, 0.3, -1.9, g, 14)); const tb = cap(0.1, 0.5, 0x495057, 0, 0.95, -1.6, g); tb.rotation.x = PI / 2; sph(0.06, 0xe03131, 0.2, 0.9, -1.62, g);
+  for (const s of [-1, 1]) { cyl(0.04, 0.04, 2.2, 0xadb5bd, s * 1.6, 1.1, 1.9, g, 6); } cap(0.035, 3.2, 0xadb5bd, 0, 2.2, 1.9, g).rotation.z = PI / 2;
+  bake(g);
+  const net = noRay(new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.1, 8, 5), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.5 }))); net.position.set(0, 1.1, 1.9); net.userData.camBig = 0; g.add(net);
+  const bat = dyn(g, 0.55, 1.0, 1.2); cap(0.035, 0.5, 0xdeb887, 0, 0, -0.3, bat).rotation.x = PI / 2; cap(0.055, 0.35, 0xdeb887, 0, 0, -0.75, bat).rotation.x = PI / 2; sph(0.05, 0x8d6e63, 0, 0, 0.0, bat); bake(bat); bat.rotation.y = -0.9;
+  const ball = sph(0.075, 0xffffff, 0, 0, 0, scene); ball.visible = false; th.objs.push(ball);
+  addSign(th, 3.2);
+  th.challenge = () => { const t = tm[rndI(tm.length)]; return { tag: '할 일 말하기', pic: esc(p0.emoji || '⚾') + ' ' + esc(p0.ko) + ' <small>' + esc(t.ko) + '</small>', en: what(t), ko: '그림을 보고 무엇을 할지 대답해요', say: [what(t)], choices: [going(p0)].concat(others(pl.map(going), going(p0), 3)), right: going(p0), after: bye ? [going(p0), [bye.en, 'Teacher']] : [going(p0)] }; };
+  th.use = () => { th.busy = 6;
+    for (let i = 0; i < 3; i++) later(0.3 + i * 1.7, () => { const a = th.W(0, 0.95, -1.3), b = th.W(0.1, 1.0, 1.15); G.beep([[500, .04]]); toss(ball, a, b, 0.45, 0.15, () => { G.beep([[900, .03], [400, .06], [250, .08]]); tw(0.3, k => { bat.rotation.y = -0.9 + Math.sin(k * PI) * 2.6; }); const far = th.W((i - 1) * 9, 6 + i * 2, -22); toss(ball, b, far, 1.1, 5, () => { ball.visible = false; }); const w = th.W(0, 2.6, 0); emo(i === 2 ? '🎉' : '⚾', w[0], w[1], w[2], 0.7); }); });
+    later(5.2, () => cheer(th, null, '⚾ 딱! 딱! 딱! 공을 멀리 쳤어요', 2800)); };
+};
+// L10 · 비교 전시대 (bigger · longer · stronger · taller)
+THEME3[10] = () => {
+  const cards = (L.cards || []).filter(c => c && c.en && c.word), wd = L.words || [], pool = cards.filter(c => /^(bigger|longer|stronger|taller)$/.test(c.word)); if (pool.length < 2 || cards.length < 4) return;
+  const th = mkStation('compare', '🔍', '비교 전시대', 2.0, { solid: 0.9, verb: '보기' }); if (!th) return; const g = th.g;
+  cyl(1.5, 1.6, 0.5, 0x7048e8, 0, 0.25, 0, g, 24); flatZ(tor(1.52, 0.05, 0xffd43b, 0, 0.5, 0, g)); for (let i = 0; i < 8; i++) sph(0.07, 0xffd43b, Math.cos(i * PI / 4) * 1.58, 0.3, Math.sin(i * PI / 4) * 1.58, g);
+  bake(g);
+  const tt = dyn(g, 0, 0.5, 0); cyl(1.35, 1.35, 0.06, 0xf8f0e3, 0, 0.03, 0, tt, 24);
+  const sc = {}, person = (pp, x, h, c) => { cap(0.14, h - 0.55, c, x, (h - 0.27) / 2 + 0.04, 0, pp); sph(0.15, 0xf5cfa8, x, h - 0.13, 0, pp); ell(0.16, 1, 0.6, 1, 0x5c4033, x, h - 0.04, -0.02, pp); for (const s of [-1, 1]) sph(0.02, 0x212529, x + s * 0.055, h - 0.12, 0.135, pp); };
+  { const s = sc.bigger = dyn(tt, 0, 0.06, 0); sph(0.38, 0xe8731c, -0.42, 0.38, 0, s); tor(0.382, 0.012, 0x3a2a1a, -0.42, 0.38, 0, s); flatZ(tor(0.382, 0.012, 0x3a2a1a, -0.42, 0.38, 0, s)); sph(0.24, 0xffffff, 0.5, 0.24, 0, s); for (let i = 0; i < 6; i++) sph(0.07, 0x212529, 0.5 + Math.cos(i * 1.05) * 0.2, 0.24 + Math.sin(i * 1.05) * 0.2 * (i % 2 ? 1 : -0.4), 0.13 * (i % 2 ? 1 : -1), s); bake(s); }
+  { const s = sc.longer = dyn(tt, 0, 0.06, 0); const pen = (z, len, c) => { flatX(cyl(0.06, 0.06, len, c, 0, 0.07, z, s, 6)); const t = cone(0.06, 0.16, 0xf3d9b1, len / 2 + 0.08, 0.07, z, s, 6); t.rotation.z = -PI / 2; const e = flatX(cyl(0.062, 0.062, 0.1, 0xff8fab, -len / 2 - 0.05, 0.07, z, s, 6)); void e; }; pen(-0.22, 1.5, 0x40c057); pen(0.25, 0.85, 0x339af0); bake(s); }
+  { const s = sc.stronger = dyn(tt, 0, 0.06, 0); person(s, -0.4, 1.15, 0xe03131); person(s, 0.5, 1.05, 0x339af0); flatX(cyl(0.025, 0.025, 0.9, 0x495057, -0.4, 1.4, 0, s, 6)); for (const k of [-1, 1]) { flatX(cyl(0.16, 0.16, 0.08, 0x212529, -0.4 + k * 0.42, 1.4, 0, s, 12)); cap(0.035, 0.24, 0xe03131, -0.4 + k * 0.17, 1.22, 0, s); } bake(s); }
+  { const s = sc.taller = dyn(tt, 0, 0.06, 0); person(s, -0.35, 1.45, 0x12b886); person(s, 0.4, 1.0, 0xf08c00); box(0.1, 1.6, 0.04, 0xfff3bf, 0.95, 0.8, 0, s); for (let i = 1; i < 8; i++) box(0.06, 0.012, 0.045, 0x495057, 0.93, i * 0.2, 0, s); bake(s); }
+  const show = (w) => { for (const k in sc) sc[k].visible = k === w; }; show(pool[0].word);
+  addSign(th, 3.0);
+  th.challenge = () => { const c = th.cur = pool[pickI(th, pool.length)]; show(c.word); G.beep([[600, .04], [800, .05]]); return { tag: '비교해서 말하기', pic: '🔍', ko: '전시대의 두 가지를 보고 비교하는 문장을 골라요', choices: [c.en].concat(others(cards.map(x => x.en), c.en, 3)), right: c.en, after: [c.en], afterKo: (wd.find(w => w.id === c.word) || {}).ko }; };
+  th.use = () => { th.busy = 2.6; tw(2.2, k => { tt.rotation.y = smooth(k) * PI * 2; }, () => { tt.rotation.y = 0; }); tune([523, 784, 1046], 0.14); const w = th.W(0, 2.2, 0); burst(w[0], w[1], w[2], { n: 14, sp: 2.4, life: 0.8, size: 0.3, cols: [0xffd43b, 0xffffff], g: 2 }); cheer(th, null, '🔍 ' + esc((th.cur || pool[0]).en), 3000); };
+};
+// L11 · 지하철역 (가는 방법 듣기)
+THEME3[11] = () => {
+  const sw = L.stopWords || {}, src = (L.mapGame || []).concat(L.findGame || []).filter(d => d && d.name && d.line && d.stopLabel && sw[d.stop]);
+  const tell2 = (d) => { const a = swap(S4[1] && S4[1].en, 'Bus Number 5', d.line); return a && swap(a, 'the market', d.stopLabel); }, howq = (d) => swap(S4[0] && S4[0].en, 'the library', 'the ' + d.name);
+  if (src.length < 3 || !tell2(src[0]) || !howq(src[0])) return;
+  const th = mkStation('subway', '🚇', '꼬마 지하철역', 2.6, { verb: '보내기' }); if (!th) return; const g = th.g;
+  box(4.6, 0.3, 1.4, 0xdee2e6, 0, 0.15, 0.6, g); box(4.6, 0.04, 0.16, 0xffd43b, 0, 0.32, -0.02, g); box(4.6, 0.08, 1.2, 0x495057, 0, 0.04, -0.75, g); for (const z of [-1.05, -0.45]) box(4.6, 0.06, 0.07, 0xadb5bd, 0, 0.11, z, g); for (let i = 0; i < 10; i++) box(0.14, 0.03, 0.8, 0x8d6e63, -2.1 + i * 0.46, 0.085, -0.75, g);
+  for (const x of [-1.7, 1.7]) cyl(0.06, 0.07, 2.2, 0x868e96, x, 1.4, 0.95, g, 8); flatX(cyl(0.6, 0.6, 4.2, 0x339af0, 0, 2.35, 0.75, g, 14)).scale.set(1, 1, 0.3); box(1.5, 0.4, 0.06, 0x1c7ed6, 0, 1.9, 1.0, g);
+  box(0.7, 0.9, 0.3, 0xffffff, -1.2, 0.75, 0.9, g); box(0.5, 0.25, 0.04, 0x74c0fc, -1.2, 0.95, 1.06, g);
+  bake(g);
+  const tr = dyn(g, -9, 0.14, -0.75); for (const x of [-1.0, 1.0]) { box(1.8, 0.75, 0.9, 0x2f9e44, x, 0.55, 0, tr); flatX(cyl(0.45, 0.45, 1.8, 0xf8f9fa, x, 0.95, 0, tr, 14)).scale.set(1, 1, 0.5); for (const k of [-0.5, 0, 0.5]) box(0.36, 0.3, 0.92, 0xa5d8ff, x + k, 0.68, 0, tr); for (const k of [-0.55, 0.55]) for (const s of [-1, 1]) flatZ(cyl(0.14, 0.14, 0.08, 0x212529, x + k, 0.14, s * 0.4, tr, 10)); } flatZ(cap(0.4, 0.1, 0x2f9e44, 1.95, 0.55, 0, tr)); sph(0.08, 0xfff3bf, 2.3, 0.45, 0, tr); box(0.2, 0.1, 0.5, 0x495057, 0, 0.35, 0, tr);
+  bake(tr); tr.visible = false;
+  const sg = emoSprite('🚇', 0.34); sg.position.set(0, 1.9, 1.05); g.add(sg);
+  addSign(th, 3.4);
+  const lab = (d) => (/Subway/.test(d.line) ? '🚇 ' : '🚌 ') + ((/(\d+)/.exec(d.line) || [])[1] || '') + ' → ' + (sw[d.stop][1] || '') + ' ' + (sw[d.stop][2] || '');
+  th.challenge = () => { const d = th.cur = src[pickI(th, src.length)]; return { tag: '듣고 고르기', pic: '🚇🗺️', en: howq(d), ko: '가는 방법을 잘 듣고 알맞은 그림을 골라요', say: [[howq(d), 'Boy'], [tell2(d), 'Girl']], choices: uniq(src.map(lab)), right: lab(d), after: [tell2(d)] }; };
+  th.use = () => { th.busy = 4.5; tr.visible = true; tune([523, 659, 523, 659], 0.25, 0.2); tw(4, k => { tr.position.x = -9 + smooth(k) * 18; }, () => { tr.visible = false; }); later(1.6, () => { const w = th.W(0, 1.6, -0.75); emo('🚇', w[0], w[1] + 1, w[2], 0.8); }); cheer(th, null, '🚇 지하철이 출발해요! 안녕~', 2800); };
+};
+// L12 · 기념품 가게 (두 친구의 생각 듣기)
+THEME3[12] = () => {
+  const ls = (L.listen || []).filter(d => d && d.a && d.b && d.a[1] && d.b[1] && typeof d.agree === 'boolean'); if (ls.length < 3) return;
+  const th = mkStation('shop', '🧣', '기념품 가게', 2.2, { solid: 0.9, verb: '듣기' }); if (!th) return; const g = th.g;
+  box(2.6, 0.9, 0.7, 0xffe8cc, 0, 0.45, -0.5, g); box(2.7, 0.08, 0.8, 0xc92a2a, 0, 0.94, -0.5, g); for (const s of [-1, 1]) cyl(0.06, 0.06, 2.7, 0xffffff, s * 1.3, 1.35, -0.85, g, 8);
+  for (let i = 0; i < 7; i++) { const a = box(0.39, 0.05, 1.0, i % 2 ? 0xffffff : 0x2f9e44, -1.17 + i * 0.39, 2.72, -0.45, g); a.rotation.x = 0.3; sph(0.07, i % 2 ? 0xffffff : 0x2f9e44, -1.17 + i * 0.39, 2.54, 0.02, g); }
+  box(2.5, 0.06, 0.4, 0xdeb887, 0, 1.75, -0.8, g); box(2.5, 1.6, 0.06, 0xfff3bf, 0, 1.75, -1.0, g);
+  // 진열품: 목도리 · 모자 · 컵 · 책
+  for (const dx of [-0.07, 0.07]) cap(0.05, 0.4, 0xae3ec9, -0.9 + dx, 1.25, -0.5, g); ell(0.13, 1, 0.5, 0.7, 0xe599f7, -0.9, 1.5, -0.5, g);
+  ell(0.2, 1, 0.7, 1, 0xe03131, -0.3, 1.1, -0.5, g); sph(0.06, 0xffffff, -0.3, 1.26, -0.5, g); flatZ(tor(0.2, 0.035, 0xffffff, -0.3, 1.02, -0.5, g));
+  cyl(0.11, 0.09, 0.22, 0x74c0fc, 0.3, 1.09, -0.5, g, 12); flatX(tor(0.06, 0.016, 0x74c0fc, 0.43, 1.09, -0.5, g)).rotation.y = PI / 2;
+  box(0.34, 0.08, 0.26, 0x2b8a3e, 0.9, 1.02, -0.5, g); box(0.32, 0.06, 0.24, 0xffffff, 0.91, 1.03, -0.5, g); for (const x of [-0.8, 0, 0.8]) sph(0.11, [0xffd43b, 0x4dabf7, 0xff8fab][Math.round(x + 1)], x, 1.89, -0.8, g);
+  bake(g);
+  const item = emoSprite('🧣', 0.6); item.position.set(0, 2.25, -0.4); g.add(item);
+  addSign(th, 3.6);
+  th.challenge = () => { const d = th.cur = ls[pickI(th, ls.length)]; emoSet(item, d.emoji || '🎁'); const Y = '생각이 같아요 🙆', N = '생각이 달라요 🙅'; return { tag: '두 친구의 말 듣기', pic: esc(d.emoji || '') + ' ' + esc(d.price || ''), ko: '두 친구의 말을 잘 듣고, 생각이 같은지 골라요', say: [[d.a[1], d.a[0]], [d.b[1], d.b[0]]], choices: [Y, N], keep: true, right: d.agree ? Y : N, after: [[d.b[1], d.b[0]]], afterKo: d.b[1] }; };
+  th.use = () => { th.busy = 2.6; hop(item, 0.4, 0.5, 2.25); tune([659, 880, 1175], 0.14); const w = th.W(0, 2.4, -0.3); burst(w[0], w[1], w[2], { n: 14, sp: 2.4, life: 0.8, size: 0.3, cols: [0xffd43b, 0xffffff, 0xff8fab], g: 2 }); cheer(th, null, '🧣 두 친구의 생각을 잘 들었어요!', 2600); };
+};
 
 // ---------------- 처음 한 번: 자리를 잡고 놀이 기구를 놓아요 ----------------
 function init() {
@@ -2048,7 +2442,7 @@ function init() {
   // 🪑 이미 있는 벤치 + (모자라면) 분수 옆 벤치 하나
   let nb = 0;
   for (const bg of findBenches()) { const rot = bg.rotation.y, x = bg.position.x, z = bg.position.z; if (nb < 4 && reachAt(x + Math.sin(rot) * 0.7, z + Math.cos(rot) * 0.7)) { buildBench(bg, x, z, rot, false); nb++; } }
-  if (nb < 2) { const sp = spot(1.5, fAt ? { near: fAt, nearW: 0.5 } : null); if (sp) { const rot = fAt ? Math.atan2(fAt[0] - sp.x, fAt[1] - sp.z) : Math.atan2(-sp.x, -sp.z); buildBench(ownBench(sp.x, sp.z, rot), sp.x, sp.z, rot, true); } }
+  if (nb < 2) { const sp = spot(1.5, fAt ? { near: fAt, nearW: 0.5 } : null); if (sp) { const rot = fAt ? Math.atan2(fAt[0] - sp.x, fAt[1] - sp.z) : Math.atan2(-sp.x, -sp.z); addSign(buildBench(ownBench(sp.x, sp.z, rot), sp.x, sp.z, rot, true), 2.3); } }
   // 놀이터: 트램펄린·그네·눈사람/모래성은 공 가까이에 모아요
   let sp = spot(2.2, { near: playAt, nearW: 0.2, lawn: 1 }); if (sp) buildTramp(sp);
   sp = spot(2.5, { near: playAt, nearW: 0.2, lawn: 1 }); if (sp) buildSwing(sp, Math.floor(rnd() * 4) * PI / 2);
@@ -2060,6 +2454,10 @@ function init() {
   sp = spot(1.3, { near: [0, 24], nearW: 0.25 }); if (sp) buildBike(sp, rnd() * 6.28);
   for (const th of ST.things) if (PRICE[th.kind]) th.price = PRICE[th.kind];
   const tf = THEME[G.lessonNo]; if (tf) { try { tf(null); } catch (e) { warn(e); } } // 단원 놀이 (그 단원 표현으로)
+  const tf3 = THEME3[G.lessonNo]; if (tf3) { try { tf3(); } catch (e) { warn(e); } } // 단원 놀이 하나 더
+  for (const [r, fn] of [[1.3, buildKite], [2.6, buildPond], [2.1, buildHoop], [1.4, buildChest]]) { try { const q = spot(r, { lawn: fn === buildPond ? 1 : 0 }); if (q) { const th = fn(q); addSign(th, ({ kite: 2.6, fish: 2.7, hoop: 4.5, chest: 2.5 })[th.kind] || 3); } } catch (e) { warn(e); } }
+  for (const th of ST.things) if (PRICE[th.kind]) th.price = PRICE[th.kind];
+  try { makeSigns(); makeRings(); } catch (e) { warn(e); }
   clearCover();
   try { buildCats(); } catch (e) { warn(e); } // 🐱 돌아다니는 고양이 두 마리
   ST.lx = P.x; ST.lz = P.z;
@@ -2144,6 +2542,10 @@ function hud() {
     else if (ST.actText != null) { act.textContent = ST.actText; ST.actText = null; }
   }
 }
+function signCull() { // 먼 간판은 쉬어요 (가벼운 화질에서는 더 가까이에서만)
+  const far = G.GFX.high ? 60 : 38, cx = camera.position.x, cz = camera.position.z;
+  for (const th of ST.things) { const s = th.sign; if (!s || th.hidden || th.kind === 'plane' || th.kind === 'scooter' || th.kind === 'bike') continue; s.visible = hyp(s.position.x - cx, s.position.z - cz) < far && !(ST.ride && ST.ride.th === th); }
+}
 function tick(dt, t) {
   if (ST.dead) return;
   if (!ST.ready) {
@@ -2158,7 +2560,7 @@ function tick(dt, t) {
   twTick(dt);
   const r0 = ST.ride;
   if (r0 && !roam(r0) && (G.dlgOpen || G.busy)) leave(true); // 대화가 열리면 바로 내려요
-  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); }
+  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); decoTick(); signCull(); }
   // 내 속도 (공 차기용)
   const sx = P.x - ST.lx, sz = P.z - ST.lz; ST.lx = P.x; ST.lz = P.z;
   if (dt > 1e-4 && hyp(sx, sz) < 2) { ST.pvx = sx / dt; ST.pvz = sz / dt; } else { ST.pvx = ST.pvz = 0; }
@@ -2166,8 +2568,10 @@ function tick(dt, t) {
   const r = ST.ride, free = !r || roam(r);
   for (const th of ST.things) { if (th.busy > 0) th.busy -= dt; if (th.tick && !th.hidden) th.tick(dt, t); }
   // 공
-  const canKick = free && G.started && !G.dlgOpen;
+  const canKick = free && G.started && !G.dlgOpen && BALL.until > ST.t;
+  if (BALL.was && BALL.until <= ST.t) { BALL.was = false; G.toast('⚽ 공 차기 시간이 끝났어요. 공이 다시 잠겼어요 🔒', 2200); }
   for (const b of BALL.list) {
+    b.lock.visible = BALL.until <= ST.t; if (b.lock.visible) b.lock.position.set(b.x, b.y + b.r + 0.5, b.z);
     if (!b.vx && !b.vz && !b.vy && b.y <= b.r + 1e-3 && b.score <= 0 && !b.pop && b.rest >= 2 && hyp(b.x - P.x, b.z - P.z) > 3 && reachAt(b.x, b.z)) { // 가만히 있는 공은 계산을 쉬어요
       b.rest += dt; b.blob.visible = !G.GFX.high; if (b.rest > 25 && hyp(b.x - b.home[0], b.z - b.home[1]) > 16) ballHome(b); continue;
     }
@@ -2206,7 +2610,7 @@ function tick(dt, t) {
   // 오늘 처음: 놀 거리가 있다고 한 번 알려요
   if (G.started && !DAY.hi[G.lessonNo] && ST.things.length && !ST.used) {
     if (!G.dlgOpen && !G.busy && !ST.ride) ST.hiT += dt;
-    if (ST.hiT > 15) { DAY.hi[G.lessonNo] = 1; saveDay(); G.toast('✈️ 🎠 ⛲ 마을 곳곳에 놀 거리가 있어요!<br><small>💎 보석을 모아 영어로 말하면 탈 수 있어요 · 지도에서 그림을 찾아가 봐요</small>', 4800); }
+    if (ST.hiT > 15) { DAY.hi[G.lessonNo] = 1; saveDay(); G.toast('✈️ 🎣 🪁 마을 곳곳에 놀 거리가 있어요!<br><small>💎 보석을 내고 영어 문제를 한 번에 맞히면 탈 수 있어요 · 지도에서 그림을 찾아가 봐요</small>', 4800); }
   }
 }
 G.tickers.push(safe(tick));
@@ -2225,7 +2629,9 @@ window.PLAY = {
   things: () => ST.things.map(th => ({ kind: th.kind, x: th.x, z: th.z, ux: th.ux, uz: th.uz, hidden: th.hidden, own: th.own, price: th.price | 0, themed: !!th.themed })),
   where: (kind) => { const th = find(kind); return th ? [th.ux, th.uz] : null; },
   use: safe((kind) => { const th = find(kind); if (!th || !th.use || !th.label() || !G.started || G.dlgOpen || G.busy) return false; return tryUse(th); }, false), // 거리와 상관없이 그 기구를 써요 (보석·영어 관문은 그대로 거쳐요)
-  wallet: () => wallet(), // 쓸 수 있는 보석
+  wallet: () => wallet(), // 지금 가진 보석
+  pet: () => { let c = null; for (const th of ST.things) if (th.kind === 'cat' && th.cat && th.cat.tame > 0 && th.cat.st !== 'flee' && (!c || th.cat.tame > c.tame)) c = th.cat; return c ? { skin: c.skin, left: Math.round(c.tame) } : null; }, // 지금 나를 따라오는 고양이 (없으면 null)
+  makeCat: safe((skin) => makeCat(skin), null), // 같은 모양의 새 고양이 Group (장면에 넣지 않은 상태). group.userData.pose(t, 'walk' | 'run' | 'sit')
   price: (kind) => { const th = find(kind); return th ? th.price | 0 : 0; },
   get gate() { return GATE.open; },
   ride: safe((kind) => window.PLAY.use(kind) && !!ST.ride, false),
