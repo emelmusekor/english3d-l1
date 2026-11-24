@@ -998,6 +998,22 @@ const sign2 = (text, h, x, y, z, ry = 0, o = {}) => { sign(text, h, x, y, z, ry,
 const floorText = (text, h, x, z, o = {}, rz = 0) => { const t = textPlane(text, h, Object.assign({ fs: 96, bg: null, fg: '#ffffff' }, o)); t.rotation.x = -Math.PI / 2; t.rotation.z = rz; t.position.set(x, 0.08, z); return t; };
 const N = Math.PI, E = Math.PI / 2, W = -Math.PI / 2; // 간판이 보는 쪽: 0=남(+z), N=북(-z), E=동(+x), W=서(-x)
 function figure(o, x, z, ry = 0, y = 0) { const p = makePerson(o); p.position.set(x, y, z); p.rotation.y = ry; p.children.forEach(ch => { if (ch.isSprite) ch.visible = false; }); scene.add(p); if (y === 0) block(x - 0.32, z - 0.32, x + 0.32, z + 0.32); return p; } // 이름표 없는 배경 사람 (서 있는 사람은 뚫고 지나가지 못해요)
+// ---------- 모델 만들 때 쓰는 재질과 모양 ----------
+const paintM = {}; const paint = (c) => paintM[c] || (paintM[c] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.36, metalness: 0.12 })); // 반들반들한 칠
+const glassM = new THREE.MeshStandardMaterial({ color: 0x8fc7ea, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.8 });
+const darkGlass = new THREE.MeshStandardMaterial({ color: 0x1f2d3a, roughness: 0.1, metalness: 0.45 });
+const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe3e6, roughness: 0.22, metalness: 0.75 });
+const goldM = new THREE.MeshStandardMaterial({ color: 0xd4a017, roughness: 0.3, metalness: 0.65 });
+const tireM = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.9 });
+const lampM = (c, k = 0.9) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
+function rrect(rw, rh, r) { const s = new THREE.Shape(), x = -rw / 2, y = -rh / 2; s.moveTo(x + r, y); s.lineTo(x + rw - r, y); s.quadraticCurveTo(x + rw, y, x + rw, y + r); s.lineTo(x + rw, y + rh - r); s.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh); s.lineTo(x + r, y + rh); s.quadraticCurveTo(x, y + rh, x, y + rh - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s; }
+// 둥근 상자: 단면(가로 rw × 세로 rh, 모서리 r)을 길이 len 만큼 민 것. 길이 방향은 z
+function rbox(rw, rh, len, r, material) { const g = new THREE.ExtrudeGeometry(rrect(rw, rh, r), { depth: len, bevelEnabled: false, curveSegments: 5 }); g.translate(0, 0, -len / 2); return new THREE.Mesh(g, material); }
+const capsule = (r, l, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 5, 12), m);
+// 바퀴. axis: 'z' = 차 길이가 x 쪽(버스), 'x' = 차 길이가 z 쪽(자동차)
+function wheel(g, x, z, r, wd, axis) {
+  for (const [rr, ww, m] of [[r, wd, tireM], [r * 0.56, wd + 0.04, chrome], [r * 0.2, wd + 0.08, darkGlass]]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, ww, 18), m); if (axis === 'z') t.rotation.x = Math.PI / 2; else t.rotation.z = Math.PI / 2; t.position.set(x, r, z); g.add(t); }
+}
 for (const [w, d, x, z] of [[2 * FEN, 0.5, 0, -FEN], [0.5, 2 * FEN, -FEN, 0], [0.5, 2 * FEN, FEN, 0], [2 * FEN, 0.5, 0, FEN]]) wall(w, 3, d, 0xdfe3e6, x, z);
 
 // ======================================================================= 남쪽: 학교 → 버스
@@ -1068,18 +1084,31 @@ block(-46, 4.8, 46, 12.2);
 // 버스 (머리는 동쪽, 문은 보도 쪽 앞문)
 const BUS_X = [8, -1.4, -10.8, -20.2, -29.6, -39], BUS_Z = 13.5;
 const busDoor = (i) => [BUS_X[i] + 2.9, 15.75];
-function busModel(no, color) {
-  const g = new THREE.Group();
-  box(8.4, 2.5, 2.5, color, 0, 1.8, 0, g); box(8.44, 0.95, 2.54, 0x22313f, -0.2, 2.35, 0, g); box(8.46, 0.5, 2.56, 0x343a40, 0, 0.5, 0, g);
-  box(0.08, 1.35, 2.2, 0x9fd3ff, 4.22, 2.2, 0, g); box(0.5, 0.16, 2.3, 0xffffff, 4.0, 3.12, 0, g);
-  for (const [x, z] of [[2.7, 1.15], [2.7, -1.15], [-2.7, 1.15], [-2.7, -1.15]]) { const w = cyl(0.46, 0.46, 0.3, 0x111111, x, 0.46, z, g, 14); w.rotation.x = Math.PI / 2; }
-  box(1.0, 2.05, 0.08, 0x9fd3ff, 2.9, 1.5, 1.27, g); box(1.14, 0.1, 0.1, 0xffd43b, 2.9, 0.42, 1.3, g);
-  if (no) { const t = textPlane(no + '호차', 0.95, { fs: 80, bg: '#ffffff', fg: '#d6336c', border: '#d6336c' }, g); t.position.set(-0.4, 2.2, 1.29);
-    const f = textPlane(String(no), 0.6, { fs: 80, bg: '#ffffff', fg: '#d6336c' }, g); f.position.set(4.27, 1.25, 0); f.rotation.y = E;
-    const c = textPlane('석정초 6학년 ' + no + '반', 0.34, { fs: 44, bg: '#ffe066', fg: '#333' }, g); c.position.set(-0.4, 1.35, 1.29); }
+function busModel(no, accent) { // 전세버스: 둥근 몸통, 창 줄, 앞 유리, 색 띠, 바퀴, 거울, 에어컨
+  const g = new THREE.Group(), LN = 8.4, WD = 2.5;
+  const body = rbox(WD, 2.55, LN, 0.34, paint(0xf8f9fa)); body.rotation.y = Math.PI / 2; body.position.y = 1.92; g.add(body);
+  box(LN - 0.2, 0.42, WD + 0.02, 0x343a40, 0, 0.62, 0, g);
+  box(LN + 0.02, 0.24, WD + 0.03, accent, 0, 1.12, 0, g); box(LN + 0.02, 0.07, WD + 0.035, 0xffffff, 0, 1.31, 0, g);
+  for (const s of [1, -1]) {
+    for (let k = 0; k < 6; k++) { if (s === 1 && k === 5) continue; const wn = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.92, 0.06), darkGlass); wn.position.set(-3.55 + k * 1.2, 2.32, s * (WD / 2 + 0.005)); g.add(wn); }
+    box(0.1, 0.1, 0.34, 0x212529, 3.9, 2.55, s * (WD / 2 + 0.16), g); box(0.08, 0.4, 0.24, 0x212529, 3.96, 2.3, s * (WD / 2 + 0.34), g);
+    const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.06, 14), lampM(0xfff3bf, 0.9)); hl.rotation.z = Math.PI / 2; hl.position.set(LN / 2 + 0.03, 0.98, s * 0.9); g.add(hl);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.36, 0.2), lampM(0xe03131, 0.6)); tl.position.set(-LN / 2 - 0.03, 1.12, s * 1.0); g.add(tl);
+    for (const x of [2.7, -2.5]) wheel(g, x, s * 1.12, 0.5, 0.32, 'z');
+  }
+  const ws = rbox(2.2, 1.4, 0.08, 0.22, glassM); ws.rotation.y = Math.PI / 2; ws.position.set(LN / 2 + 0.01, 2.22, 0); g.add(ws);
+  const rw = rbox(2.0, 0.9, 0.08, 0.16, darkGlass); rw.rotation.y = Math.PI / 2; rw.position.set(-LN / 2 - 0.01, 2.42, 0); g.add(rw);
+  for (const x of [LN / 2 - 0.04, -LN / 2 + 0.04]) box(0.22, 0.34, WD + 0.1, 0x212529, x, 0.56, 0, g);
+  box(1.12, 2.12, 0.05, 0x212529, 2.9, 1.52, WD / 2 + 0.01, g); for (const dx of [-0.27, 0.27]) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.47, 1.92, 0.06), glassM); d.position.set(2.9 + dx, 1.52, WD / 2 + 0.03); g.add(d); }
+  box(1.14, 0.1, 0.14, 0xffd43b, 2.9, 0.42, WD / 2 + 0.06, g);
+  const ac = rbox(1.5, 0.28, 2.6, 0.1, paint(0xe9ecef)); ac.rotation.y = Math.PI / 2; ac.position.set(-0.8, 3.32, 0); g.add(ac);
+  if (no) { const t = textPlane(no + '호차', 0.82, { fs: 80, bg: '#ffffff', fg: '#d6336c', border: '#d6336c' }, g); t.position.set(-0.55, 2.32, WD / 2 + 0.045);
+    const f = textPlane(String(no), 0.5, { fs: 80, bg: '#ffffff', fg: '#d6336c' }, g); f.position.set(LN / 2 + 0.07, 1.82, 0.55); f.rotation.y = E;
+    const c = textPlane('석정초 6학년 ' + no + '반', 0.32, { fs: 44, bg: '#ffe066', fg: '#333' }, g); c.position.set(-0.55, 1.62, WD / 2 + 0.045); }
+  g.traverse(o => { if (o.isMesh && o.geometry.type !== 'ExtrudeGeometry') o.userData.ns = 1; });
   return g;
 }
-const BUS_COL = [0xf8f9fa, 0xffe8cc, 0xd0ebff, 0xf8f9fa, 0xd3f9d8, 0xffdeeb];
+const BUS_COL = [0xe03131, 0xf59f00, 0x2f9e44, 0x1c7ed6, 0x7048e8, 0xd6336c];
 BUS_X.forEach((x, i) => { const b = busModel(i + 1, BUS_COL[i]); b.position.set(x, 0, BUS_Z); scene.add(b); block(x - 4.2, 12.2, x + 4.2, 14.8); });
 block(12.2, 12.2, 17.4, 14.9); block(23.6, 12.2, 31.8, 14.9); block(-46, 12.2, -43.2, 14.9);
 { // 보도와 버스 사이 울타리: 버스 앞문 자리와 주차장 진출입로만 열려 있어요
@@ -1100,7 +1129,7 @@ const UNI = { x: -6, z: 28 };
   sign('성산효대학원대학교', 1.15, UNI.x, 12.1, 24.72, N, { bg: '#e8dccb', fg: '#1d3557', fs: 64 });
   sign('성산효대학원대학교', 0.42, UNI.x, 3.2, 22.66, N, { bg: '#cabfae', fg: '#1d3557', fs: 44 }); }
 slab(63.2, 4.5, 0x5b6067, -14.4, 22, 0.02);                                // 앞 주차장
-for (const [x, c] of [[-26, 0xe9ecef], [-21, 0x343a40], [-12, 0x1c7ed6], [3, 0xf8f9fa], [8, 0xc92a2a]]) { box(1.9, 0.75, 4, c, x, 0.62, 22); box(1.7, 0.6, 2.1, 0x22313f, x, 1.22, 22.2); }
+const PARKED = [[-26, 0xe9ecef], [-21, 0x343a40], [-12, 0x1c7ed6], [3, 0xf8f9fa], [8, 0xc92a2a]]; // 차 모델은 아래에서 세워요
 for (const x of [-9, 0, 9]) prop(flagPole, UNI.x + x * 0.16 - 6.2, 20.6);
 [['H', 0xe03131], ['Y', 0x1c7ed6], ['O', 0x2f9e44]].forEach(([t, c], i) => { box(1, 1, 0.5, c, 11.4 + i * 1.15, 0.9, 20.4); sign(t, 0.8, 11.4 + i * 1.15, 0.9, 20.13, N, { bg: null, fg: '#ffffff', fs: 90 }); });
 wall(63.2, 0.8, 0.5, 0x2f7d4f, -14.4, 19.6); wall(4, 0.8, 0.5, 0x2f7d4f, 25.6, 19.6); // 낮은 생울타리
@@ -1113,8 +1142,24 @@ for (const x of [17.5, 23.5]) for (let k = 0; k < 4; k++) slab(0.18, 0.7, 0xffd4
 cyl(0.1, 0.1, 1.2, 0x495057, 17.9, 0.6, 20.6); { const bar = box(4.6, 0.12, 0.12, 0xffd43b, 20.1, 2.2, 20.6); bar.rotation.z = 0.5; }
 box(0.5, 1.3, 0.4, 0xffd43b, 23.1, 0.65, 20.6);
 signPost('🅿 주차장 진출입로\n차가 나와요! 멈추고 살펴요', 24.4, 19.0, N, { fs: 38, bg: '#fff3bf', fg: '#c92a2a', border: '#c92a2a' });
-function carModel(c) { const g = new THREE.Group(); box(1.9, 0.75, 4.1, c, 0, 0.62, 0, g); box(1.7, 0.62, 2.2, 0x22313f, 0, 1.25, 0.2, g); for (const [x, z] of [[0.9, 1.3], [-0.9, 1.3], [0.9, -1.3], [-0.9, -1.3]]) { const w = cyl(0.33, 0.33, 0.24, 0x111111, x, 0.33, z, g, 12); w.rotation.z = Math.PI / 2; } return g; }
-DRIVE.car = carModel(0xf59f00); DRIVE.car.position.set(20.5, 0, 22.8); scene.add(DRIVE.car);
+const carGeo = (() => { // 옆모습(보닛·앞 유리·지붕·트렁크)을 차 너비만큼 밀어 만든 몸통
+  const s = new THREE.Shape(); s.moveTo(-2.0, 0.32); s.lineTo(-2.02, 0.78); s.quadraticCurveTo(-2.0, 0.95, -1.7, 0.98); s.lineTo(-1.25, 1.02); s.quadraticCurveTo(-0.95, 1.45, -0.6, 1.47); s.lineTo(0.35, 1.47); s.quadraticCurveTo(0.75, 1.42, 1.05, 1.0); s.lineTo(1.75, 0.9); s.quadraticCurveTo(2.05, 0.82, 2.05, 0.6); s.lineTo(2.05, 0.32); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: 1.66, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.08, bevelSegments: 3, curveSegments: 8 }); g.translate(0, 0, -0.83); return g; })();
+function carModel(c) { // 앞 = +z
+  const g = new THREE.Group(), b = new THREE.Mesh(carGeo, paint(c)); b.rotation.y = -Math.PI / 2; g.add(b);
+  box(1.88, 0.33, 1.22, darkGlass, 0, 1.22, -0.14, g);                                           // 옆 창
+  const w1 = box(1.46, 0.76, 0.04, glassM, 0, 1.25, 0.735, g); w1.rotation.x = -0.98;            // 앞 유리
+  const w2 = box(1.46, 0.7, 0.04, darkGlass, 0, 1.26, -0.955, g); w2.rotation.x = 0.96;          // 뒤 유리
+  for (const s of [1, -1]) { for (const z of [1.3, -1.25]) wheel(g, s * 0.9, z, 0.36, 0.24, 'x');
+    const hl = box(0.36, 0.14, 0.05, lampM(0xfff3bf, 0.9), s * 0.6, 0.72, 2.1, g); const tl = box(0.4, 0.12, 0.05, lampM(0xe03131, 0.6), s * 0.58, 0.82, -2.07, g);
+    box(0.08, 0.12, 0.2, 0x212529, s * 1.0, 1.08, 0.55, g); }
+  box(1.7, 0.2, 0.14, 0x212529, 0, 0.42, 2.08, g); box(1.7, 0.2, 0.14, 0x212529, 0, 0.42, -2.06, g);
+  box(0.5, 0.12, 0.03, 0xf8f9fa, 0, 0.56, 2.15, g);
+  g.traverse(o => { if (o.isMesh && o.geometry.type !== 'ExtrudeGeometry') o.userData.ns = 1; });
+  return g;
+}
+DRIVE.car = carModel(0xf59f00); DRIVE.car.position.set(20.5, 0, 22.8); scene.add(DRIVE.car); box(0.5, 0.2, 0.26, lampM(0xffe066, 0.8), 0, 1.62, -0.1, DRIVE.car);
+PARKED.forEach(([x, c], i) => { const p = carModel(c); p.position.set(x, 0, 22); p.rotation.y = i % 2 ? 0 : N; scene.add(p); });
 // 지나가는 차들 [모형, 축('x'|'z'), 고정 좌표, 시작, 끝, 속도]
 const TRAFFIC = [
   [carModel(0x1c7ed6), 'z', 37.2, 45, 15.5, 5.5], [carModel(0xe9ecef), 'z', 34.2, 15.5, 45, 4.6],
@@ -1163,7 +1208,7 @@ const LW = { gate: [11, -9.6], top: [11, -15], meet: [19.2, -21.2] };
 flat(92, 6.7, 0xd9cfc0, 0, -6.1);
 wall(54, 4, 0.5, 0xf1e3c6, -19, -9.6); wall(32, 4, 0.5, 0xf1e3c6, 30, -9.6);  // 통로와 광장 사이 벽 (정문 게이트 x 8~14 만 열림)
 slab(19, 6.6, 0x555a60, -36.5, -6.1, 0.03);                                // 옥외지상주차장
-for (const [x, z, c] of [[-40.4, -7.9, 0xf8f9fa], [-41.2, -4.1, 0xffe8cc]]) { const b = busModel(0, c); b.position.set(x, 0, z); b.rotation.y = N; scene.add(b); block(x - 4.2, z - 1.3, x + 4.2, z + 1.3); }
+for (const [x, z, c] of [[-40.4, -7.9, 0x1c7ed6], [-41.2, -4.1, 0xf59f00]]) { const b = busModel(0, c); b.position.set(x, 0, z); b.rotation.y = N; scene.add(b); block(x - 4.2, z - 1.3, x + 4.2, z + 1.3); }
 sign('🅿 옥외지상주차장', 0.6, -34, 3.3, -9.33, 0, { bg: '#495057', fg: '#ffffff' });
 for (let k = 0; k < 6; k++) slab(0.5, 2.4, 0xffffff, -35.4 + k * 1.0, -6.0, 0.05); // 보행로 표시
 // 웰빙센터 입구: 한 층 내려가는 에스컬레이터
@@ -1175,8 +1220,8 @@ function escalator(x1, z1, x2, z2, alongX, id) { // 납작하게 그린 에스�
   slab(w, d, 0x343a40, cx, cz, 0.04);
   const n = Math.round((alongX ? w : d) / 0.5);
   for (let i = 0; i <= n; i++) alongX ? slab(0.05, d - 0.3, 0x868e96, x1 + (i / n) * (x2 - x1), cz, 0.05) : slab(w - 0.3, 0.05, 0x868e96, cx, z1 + (i / n) * (z2 - z1), 0.05);
-  if (alongX) { for (const z of [z1, z2]) { wall(w, 1.05, 0.16, 0x212529, cx, z); slab(w, 0.14, 0xffd43b, cx, z + (z === Math.min(z1, z2) ? 0.28 : -0.28), 0.055); } }
-  else { for (const x of [x1, x2]) { wall(0.16, 1.05, d, 0x212529, x, cz); slab(0.14, d, 0xffd43b, x + (x === Math.min(x1, x2) ? 0.28 : -0.28), cz, 0.055); } }
+  if (alongX) { for (const z of [z1, z2]) { { const m = wall(w, 1.0, 0.1, 0x9fd3ff, cx, z); m.material = glassM; box(w, 0.1, 0.2, 0x111111, cx, 1.06, z); } slab(w, 0.14, 0xffd43b, cx, z + (z === Math.min(z1, z2) ? 0.28 : -0.28), 0.055); } }
+  else { for (const x of [x1, x2]) { { const m = wall(0.1, 1.0, d, 0x9fd3ff, x, cz); m.material = glassM; box(0.2, 0.1, d, 0x111111, x, 1.06, cz); } slab(0.14, d, 0xffd43b, x + (x === Math.min(x1, x2) ? 0.28 : -0.28), cz, 0.055); } }
   ESC.push({ id, x1: Math.min(x1, x2), x2: Math.max(x1, x2), z1: Math.min(z1, z2), z2: Math.max(z1, z2) });
 }
 escalator(-25.4, -7.3, -19.6, -4.9, true, 'down');
@@ -1202,7 +1247,7 @@ escalator(9.2, -9.9, 12.8, -13.4, false, 'up');
 block(8, -13.4, 9.1, -9.8); block(12.9, -13.4, 14, -9.8);
 flat(92, 36.2, 0xeadfce, 0, -27.9);                                         // 1층 광장 바닥
 { const t = solid(1.5, 7.5, 1.5, 0xf1e3c6, 5.6, 3.75, -17); t.userData.plain = 1; const c = new THREE.Mesh(new THREE.ConeGeometry(1.4, 1.8, 4), mat(0x1c7ed6)); c.rotation.y = Math.PI / 4; c.position.set(5.6, 8.4, -17); scene.add(c);
-  for (const [ry, dx, dz] of [[0, 0, 0.77], [N, 0, -0.77], [E, 0.77, 0], [W, -0.77, 0]]) sign('🕙', 1.0, 5.6 + dx, 6.2, -17 + dz, ry, { fs: 100, bg: '#ffffff' }); sign('시계탑', 0.4, 5.6, 2.6, -16.22, 0, { fs: 44 }); }
+   sign('시계탑', 0.4, 5.6, 2.6, -16.22, 0, { fs: 44 }); }
 // 가운데 뚫린 곳: 아래층 아이스링크가 내려다보여요 (난간)
 const RINKV = { x: -6, z: -25, rx: 11, rz: 6.5 };
 { const ice = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: 0xcfeefc, roughness: 0.35 })); ice.rotation.x = -Math.PI / 2; ice.scale.set(RINKV.rx - 0.5, RINKV.rz - 0.5, 1); ice.position.set(RINKV.x, 0.05, RINKV.z); scene.add(ice);
@@ -1214,16 +1259,37 @@ const RINKV = { x: -6, z: -25, rx: 11, rz: 6.5 };
 const skaters = [0xf783ac, 0x845ef7, 0x4dabf7].map((c, i) => figure({ name: 'Sk' + i, girl: i !== 2, shirt: c, hair: 0x3b2a1a, scale: 0.6 }, RINKV.x, RINKV.z, 0, 0.06));
 // 회전목마 (우리 반 집합 장소)
 const CARO = { x: 26, z: -23, spin: new THREE.Group() };
-cyl(4.7, 4.7, 0.3, 0xc9a227, CARO.x, 0.15, CARO.z, scene, 28); cyl(0.5, 0.5, 5, 0xf8f0e3, CARO.x, 2.5, CARO.z, scene, 12);
-{ const top = new THREE.Mesh(new THREE.ConeGeometry(5.3, 2.3, 16), mat(0x4263eb)); top.position.set(CARO.x, 6.1, CARO.z); scene.add(top);
-  const top2 = new THREE.Mesh(new THREE.ConeGeometry(5.32, 2.3, 16, 1, true, 0, Math.PI / 8), mat(0xffffff)); for (let i = 0; i < 8; i++) { const s = top2.clone(); s.rotation.y = i * Math.PI / 4; s.position.set(CARO.x, 6.12, CARO.z); scene.add(s); }
-  cyl(5.3, 5.3, 0.5, 0xffe066, CARO.x, 4.75, CARO.z, scene, 28); ball(0.35, 0xffd43b, CARO.x, 7.5, CARO.z);
-  CARO.spin.position.set(CARO.x, 0, CARO.z); scene.add(CARO.spin);
-  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, r = i % 2 ? 3.7 : 2.7, h = new THREE.Group(); const col = [0xffffff, 0xffc9c9, 0xd0ebff, 0xfff3bf, 0xe5dbff][i % 5];
-    box(0.9, 0.42, 0.34, col, 0, 1.25, 0, h); box(0.28, 0.5, 0.26, col, 0.5, 1.6, 0, h); box(0.36, 0.2, 0.24, col, 0.68, 1.78, 0, h); for (const dx of [-0.3, 0.3]) box(0.1, 0.55, 0.12, col, dx, 0.82, 0, h); box(0.5, 0.1, 0.36, 0xe03131, -0.05, 1.5, 0, h); cyl(0.035, 0.035, 4.2, 0xc9a227, 0, 2.5, 0, h, 6);
-    h.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); h.rotation.y = -a - Math.PI / 2; h.userData.ph = i * 1.7; CARO.spin.add(h); } }
-block(CARO.x - 4.4, CARO.z - 4.4, CARO.x + 4.4, CARO.z + 4.4);
-sign('🎠 회전목마', 0.6, CARO.x, 3.6, CARO.z + 5.36, 0, { bg: '#4263eb', fg: '#ffffff' }); sign('🎠 회전목마', 0.6, CARO.x - 5.36, 3.6, CARO.z, W, { bg: '#4263eb', fg: '#ffffff' });
+{ // 회전목마: 금빛 받침, 거울 기둥, 줄무늬 지붕과 물결 가장자리, 전구, 목마 12마리
+  const C = CARO;
+  cyl(4.95, 5.05, 0.16, 0x8d6e63, C.x, 0.08, C.z, scene, 36); { const deck = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.72, 0.22, 36), goldM); deck.position.set(C.x, 0.27, C.z); scene.add(deck); }
+  cyl(0.9, 0.9, 4.4, 0xf8f0e3, C.x, 2.55, C.z, scene, 16);
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, m = new THREE.Mesh(new THREE.BoxGeometry(0.52, 2.3, 0.04), chrome); m.position.set(C.x + Math.cos(a) * 0.9, 2.4, C.z + Math.sin(a) * 0.9); m.rotation.y = -a + Math.PI / 2; m.userData.ns = 1; scene.add(m); }
+  for (const y of [0.95, 3.85]) { const b = new THREE.Mesh(new THREE.TorusGeometry(0.93, 0.07, 8, 24), goldM); b.rotation.x = Math.PI / 2; b.position.set(C.x, y, C.z); scene.add(b); }
+  const top = new THREE.Mesh(new THREE.ConeGeometry(5.4, 2.4, 24), mat(0x4263eb)); top.position.set(C.x, 6.2, C.z); scene.add(top);
+  for (let i = 0; i < 12; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(5.43, 2.4, 24, 1, true, i * Math.PI / 6, Math.PI / 12), mat(0xffffff)); s.position.set(C.x, 6.22, C.z); s.userData.ns = 1; scene.add(s); }
+  { const rim = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.4, 0.55, 36, 1, true), new THREE.MeshStandardMaterial({ color: 0xffe066, roughness: 0.5, side: THREE.DoubleSide })); rim.position.set(C.x, 4.75, C.z); scene.add(rim); }
+  for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2;
+    const sc = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(i % 2 ? 0x4263eb : 0xe03131)); sc.position.set(C.x + Math.cos(a) * 5.4, 4.5, C.z + Math.sin(a) * 5.4); sc.userData.ns = 1; scene.add(sc);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), lampM(0xfff3bf, 1.3)); bulb.position.set(C.x + Math.cos(a + 0.13) * 5.45, 4.9, C.z + Math.sin(a + 0.13) * 5.45); bulb.userData.ns = 1; scene.add(bulb); }
+  { const fin = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8), goldM); fin.position.set(C.x, 7.55, C.z); scene.add(fin); const fc = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 8), goldM); fc.position.set(C.x, 8.1, C.z); scene.add(fc); }
+  C.spin.position.set(C.x, 0.38, C.z); scene.add(C.spin);
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2, r = i % 2 ? 3.8 : 2.6, h = new THREE.Group(), col = paint([0xffffff, 0xffe3e3, 0xdbe4ff, 0xfff3bf, 0xe5dbff, 0xd3f9d8][i % 6]), acc = mat([0xe03131, 0x1c7ed6, 0x2f9e44, 0xf59f00][i % 4]);
+    const body = capsule(0.2, 0.55, col); body.rotation.z = Math.PI / 2; body.position.y = 1.2; h.add(body);
+    const neck = capsule(0.13, 0.32, col); neck.position.set(0.42, 1.48, 0); neck.rotation.z = -0.6; h.add(neck);
+    const head = capsule(0.11, 0.2, col); head.position.set(0.62, 1.7, 0); head.rotation.z = 1.05; h.add(head);
+    for (const dz of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 6), col); e.position.set(0.52, 1.86, dz); h.add(e); }
+    const mane = capsule(0.05, 0.36, acc); mane.position.set(0.36, 1.58, 0); mane.rotation.z = -0.6; h.add(mane);
+    const tail = capsule(0.05, 0.3, acc); tail.position.set(-0.52, 1.18, 0); tail.rotation.z = 0.7; h.add(tail);
+    [[0.3, 0.55], [0.3, -0.35], [-0.28, 0.3], [-0.28, -0.3]].forEach(([dx, rz], k) => { const l = capsule(0.055, 0.42, col); l.position.set(dx + Math.sin(rz) * 0.2, 0.82, k % 2 ? 0.1 : -0.1); l.rotation.z = rz; h.add(l); });
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.36), acc); saddle.position.set(-0.03, 1.42, 0); h.add(saddle);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 4.2, 6), goldM); pole.position.y = 2.3; h.add(pole);
+    h.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); h.rotation.y = -a - Math.PI / 2; h.userData.ph = i * 1.7; h.traverse(o => { o.userData.ns = 1; }); C.spin.add(h);
+  }
+  for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; if (Math.abs(a - Math.PI) < 0.3) continue; cyl(0.05, 0.05, 0.9, 0xd4a017, C.x + Math.cos(a) * 5.2, 0.45, C.z + Math.sin(a) * 5.2, scene, 6); }
+}
+block(CARO.x - 5.1, CARO.z - 5.1, CARO.x + 5.1, CARO.z + 5.1);
+sign('🎠 회전목마', 0.6, CARO.x, 3.9, CARO.z + 5.5, 0, { bg: '#4263eb', fg: '#ffffff' }); sign('🎠 회전목마', 0.6, CARO.x - 5.5, 3.9, CARO.z, W, { bg: '#4263eb', fg: '#ffffff' });
 cyl(0.07, 0.07, 3.2, 0xe03131, LW.meet[0], 1.6, LW.meet[1]); { const s = textSprite('📍 우리 반 집합 장소\n회전목마 앞 · 2시 50분', 0.95, { fs: 46, bg: '#e03131', fg: '#ffffff' }); s.position.set(LW.meet[0], 3.75, LW.meet[1]); scene.add(s); }
 // 만남의 광장 편의시설: 인포메이션(손님상담실) · 의무실 · 미아보호소 · 분실물센터 · 물품보관함  (회전목마를 바라보고 왼쪽)
 const FAC = { z: -38, info: [3, -38], aid: [9, -38], lost: [15, -38], found: [20.2, -38] };
@@ -1263,7 +1329,11 @@ for (let k = 0; k < 6; k++) slab(0.5, 0.25, 0x2f9e44, 39.4 + k * 0.9, -42, 0.05)
 // 후룸라이드 (1층 남서쪽) · 리뉴얼 운휴 중인 스페인해적선 · 가든스테이지
 const FLUME = { x: -27, z: -12.6, boat: null };
 slab(13, 3.0, 0x4dabf7, FLUME.x, -11.6, 0.035); wall(13, 0.7, 0.2, 0x8d6e63, FLUME.x, -13.2);
-{ const g = new THREE.Group(); box(2.2, 0.55, 0.9, 0x8d5524, 0, 0.42, 0, g); box(0.3, 0.75, 0.9, 0x7a4a1e, 1.0, 0.6, 0, g); FLUME.boat = g; g.position.set(FLUME.x, 0, -11.6); scene.add(g); }
+{ const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: 0x8d5524, roughness: 0.8 }); // 통나무 보트
+  const log = capsule(0.46, 1.5, wood); log.rotation.z = Math.PI / 2; log.position.y = 0.42; g.add(log); box(1.7, 0.3, 0.62, 0x4a2d12, 0, 0.74, 0, g);
+  for (const x of [-0.5, 0.15]) box(0.08, 0.36, 0.56, 0x6b4423, x, 0.95, 0, g);
+  { const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 14), mat(0xdeb887)); nose.rotation.z = Math.PI / 2; nose.position.set(1.22, 0.42, 0); g.add(nose); }
+  FLUME.boat = g; g.position.set(FLUME.x, 0, -11.6); scene.add(g); }
 sign('🚣 후룸라이드 FLUME RIDE', 0.6, FLUME.x, 3.3, -13.3, N, { bg: '#1971c2', fg: '#ffffff', fs: 50 }); for (const dx of [-5, 5]) cyl(0.08, 0.08, 3.3, 0x868e96, FLUME.x + dx, 1.65, -13.3);
 heightGauge(-19.6, -13.9, N, '키 110cm 이상\n물이 많이 튀어요', [[110, 0xe03131]]);
 const SHIP = { spot: [-36.6, -19] };
@@ -1284,9 +1354,17 @@ slab(19.6, 3.4, 0x4dabf7, -29.9, -34.6, 0.02); slab(1.8, 3.4, 0x4dabf7, -45.1, -
 slab(26, 9.7, 0xd6d0c4, -33, -41.15, 0.02);
 { solid(7, 4.6, 2, 0xf8f9fa, -34, 2.3, -44.6).userData.plain = 1; for (const [dx, h] of [[-3.2, 7.5], [0, 9.5], [3.2, 7.5]]) { cyl(0.9, 0.9, h, 0xf8f9fa, -34 + dx, h / 2, -44.6, scene, 12); const c = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.4, 12), mat(0x4263eb)); c.position.set(-34 + dx, h + 1.2, -44.6); scene.add(c); }
   box(1.6, 2.2, 0.1, 0x5c4033, -34, 1.1, -43.58); sign('🏰 매직캐슬', 0.5, -34, 3.2, -43.56, 0, { bg: '#4263eb', fg: '#ffffff' }); }
-{ const t = cyl(0.8, 1.0, 22, 0xe03131, MI.drop[0], 11, MI.drop[1], scene, 14); for (let k = 0; k < 5; k++) cyl(0.84, 0.84, 1.2, 0xffffff, MI.drop[0], 3 + k * 4.2, MI.drop[1], scene, 14);
-  const r = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.42, 10, 26), mat(0xffd43b)); r.rotation.x = Math.PI / 2; r.position.set(MI.drop[0], 2, MI.drop[1]); scene.add(r); MI.ring = r;
-  block(MI.drop[0] - 2.6, MI.drop[1] - 2.6, MI.drop[0] + 2.6, MI.drop[1] + 2.6); sign2('🗼 자이로드롭', 0.55, MI.drop[0] - 3.4, 3.1, MI.drop[1] + 2.9, 0, { bg: '#e03131', fg: '#ffffff' }); }
+{ // 자이로드롭: 줄무늬 탑, 네 줄 레일, 꼭대기 장식, 바깥을 보고 앉는 의자 16개가 달린 고리
+  const X = MI.drop[0], Z = MI.drop[1], steel = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.4, metalness: 0.5 });
+  cyl(3.0, 3.2, 0.3, 0x868e96, X, 0.15, Z, scene, 8);
+  { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.95, 22, 18), steel); col.position.set(X, 11, Z); scene.add(col); }
+  for (let k = 0; k < 6; k++) { const rr = 0.97 - k * 0.035, b = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 1.4, 18), mat(k % 2 ? 0xe03131 : 0x1c7ed6)); b.position.set(X, 2.2 + k * 3.7, Z); scene.add(b); }
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.78, r = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 21.4, 6), mat(0xffd43b)); r.position.set(X + Math.cos(a) * 1.02, 10.9, Z + Math.sin(a) * 1.02); r.userData.ns = 1; scene.add(r); }
+  { const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 0.9, 1.2, 12), mat(0xe03131)); crown.position.set(X, 22.6, Z); scene.add(crown); const tip = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.2, 10), mat(0xffd43b)); tip.position.set(X, 24.3, Z); scene.add(tip); }
+  const ring = new THREE.Group(), hoop = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.22, 10, 28), paint(0xffd43b)); hoop.rotation.x = Math.PI / 2; ring.add(hoop);
+  for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, s = new THREE.Group(); box(0.42, 0.1, 0.4, 0x1c3fa8, 0, -0.25, 0.22, s); box(0.42, 0.62, 0.1, 0x1c3fa8, 0, 0.05, 0.02, s); box(0.34, 0.08, 0.3, 0xe03131, 0, 0.2, 0.26, s); s.position.set(Math.sin(a) * 2.0, 0, Math.cos(a) * 2.0); s.rotation.y = a; ring.add(s); }
+  ring.position.set(X, 2, Z); ring.traverse(o => { o.userData.ns = 1; }); scene.add(ring); MI.ring = ring;
+  block(X - 2.8, Z - 2.8, X + 2.8, Z + 2.8); sign2('🗼 자이로드롭', 0.55, X - 3.6, 3.1, Z + 3.1, 0, { bg: '#e03131', fg: '#ffffff' }); }
 heightGauge(-28.6, -37.6, 0, '키 130~190cm\n소지품은 모두 보관함에', [[130, 0xe03131], [190, 0xe03131]]);
 solid(2.6, 2.8, 2.2, 0xf8f9fa, -44.4, 1.4, -44.6).userData.plain = 1; sign('➕ 의무실 (야외)', 0.42, -44.4, 3.15, -43.48, 0, { fs: 42, bg: '#2b8a3e', fg: '#ffffff' });
 signPost('아트란티스 ➡ (키 135~190cm)\n문보트 탑승장 ⬅', -31.2, -37.1, 0, { fs: 34 });
@@ -1314,7 +1392,7 @@ const LWFX = { balloons: [], train: [], blades: null, swing: null, RX: 34, RZ: 1
 // 월드모노레일: 광장 위를 한 바퀴 도는 높은 선로와 열차
 { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.011, 6, 90), mat(0x4263eb)); r.rotation.x = Math.PI / 2; r.scale.set(LWFX.RX, LWFX.RZ, 16); r.position.set(0, 8.2, LWFX.cz); r.userData.ns = 1; scene.add(r);
   for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + 0.31, x = Math.cos(a) * LWFX.RX, z = LWFX.cz + Math.sin(a) * LWFX.RZ; if (clearAt(x, z, 0.6) && Math.hypot(x - CARO.x, z - CARO.z) > 9.5 && Math.hypot(x - 11, z + 15) > 6 && Math.hypot(x - RINKV.x, z - RINKV.z) > 14) { cyl(0.22, 0.28, 8.1, 0xdfe3e6, x, 4.05, z, scene, 8); block(x - 0.25, z - 0.25, x + 0.25, z + 0.25); } }
-  [0xffffff, 0xe03131, 0xffffff].forEach((c, k) => { const car = new THREE.Group(); box(2.3, 1.0, 1.1, c, 0, 0.75, 0, car); box(2.1, 0.45, 1.14, 0x22313f, 0, 0.95, 0, car); car.traverse(o => { o.userData.ns = 1; }); scene.add(car); LWFX.train.push({ g: car, k }); }); }
+  [0xffffff, 0xe03131, 0xffffff].forEach((c, k) => { const car = new THREE.Group(); { const b = capsule(0.58, 1.4, paint(c)); b.rotation.z = Math.PI / 2; b.position.y = 0.8; car.add(b); box(1.5, 0.4, 1.18, darkGlass, 0, 0.98, 0, car); box(1.9, 0.12, 1.19, 0xe03131, 0, 0.55, 0, car); } car.traverse(o => { o.userData.ns = 1; }); scene.add(car); LWFX.train.push({ g: car, k }); }); }
 // 유럽풍 집 (광장 둘레)
 function euroHouse(x, z, w, h, wallC, roofC, ry) {
   const g = grp(x, z, ry), d = 2.0;
@@ -1423,6 +1501,17 @@ for (const [x, t, c] of [[-13, '🎠 회전목마', '#4263eb'], [-6.2, '🗼 자
 upperWall(8, -9.6, 14, -9.6, 5.2, 13, euroTex, 12); box(6, 0.5, 1.7, 0x8d4b2e, 11, 13.25, -9.6);
 sign('롯데월드 어드벤처', 0.7, 11, 5.9, -9.04, 0, { fs: 56, bg: '#7a1f3d', fg: '#ffe066' }); sign('나가는 곳 · 정문 게이트', 0.6, 11, 5.9, -10.16, N, { fs: 50, bg: '#7a1f3d', fg: '#ffe066' });
 for (const [x, z] of [[45.2, -45.2], [45.2, -10], [-45.2, -10]]) { cyl(1.3, 1.3, 15.5, 0xf8f0e3, x, 7.75, z, scene, 12); const c = new THREE.Mesh(new THREE.ConeGeometry(1.7, 3.2, 12), mat(0x364fc7)); c.position.set(x, 17.1, z); scene.add(c); }
+
+// ----- 모델 덧붙이기: 시계, 좌석 머리받이, 성 -----
+{ const clockTex = canvasTex(256, 256, (x) => { x.fillStyle = '#fffdf5'; x.beginPath(); x.arc(128, 128, 120, 0, 7); x.fill(); x.lineWidth = 12; x.strokeStyle = '#c9a227'; x.stroke(); x.fillStyle = '#3b2a1a';
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; x.beginPath(); x.arc(128 + Math.sin(a) * 96, 128 - Math.cos(a) * 96, k % 3 ? 5 : 9, 0, 7); x.fill(); }
+    x.lineCap = 'round'; x.strokeStyle = '#3b2a1a'; x.lineWidth = 12; x.beginPath(); x.moveTo(128, 128); x.lineTo(128 - 43, 128 - 36); x.stroke(); x.lineWidth = 8; x.beginPath(); x.moveTo(128, 128); x.lineTo(128 + 76, 128 + 44); x.stroke(); x.beginPath(); x.arc(128, 128, 9, 0, 7); x.fill(); });
+  for (const [ry, dx, dz] of [[0, 0, 0.77], [N, 0, -0.77], [E, 0.77, 0], [W, -0.77, 0]]) { const f = new THREE.Mesh(new THREE.CircleGeometry(0.62, 30), new THREE.MeshBasicMaterial({ map: clockTex, transparent: true })); f.position.set(5.6 + dx, 6.2, -17 + dz); f.rotation.y = ry; scene.add(f); }
+  box(1.9, 0.3, 1.9, 0xc9a227, 5.6, 7.45, -17); box(1.9, 0.4, 1.9, 0xd9cdbb, 5.6, 0.2, -17); for (const y of [2.2, 5.0]) box(1.62, 0.14, 1.62, 0xc9a227, 5.6, y, -17); }
+SEAT_ROWS.forEach((xr, k) => SEAT_Z.forEach((z, j) => { const mine = k === 4 && j === 2, hr = rbox(0.36, 0.26, 0.12, 0.09, mat(mine ? 0xfab005 : 0x2f44ad)); hr.rotation.y = Math.PI / 2; hr.position.set(xr - 0.32, 1.52, z); hr.userData.ns = 1; scene.add(hr); }));
+{ const arch = new THREE.Mesh(new THREE.CircleGeometry(0.8, 18, 0, Math.PI), mat(0x5c4033)); arch.position.set(-34, 2.2, -43.57); scene.add(arch);
+  for (const [dx, y] of [[-2.4, 3.2], [2.4, 3.2], [-3.2, 6], [3.2, 6], [0, 7.6], [-1.6, 9.2], [1.6, 9.2]]) box(0.36, 0.6, 0.06, lampM(0xffe9a8, 0.5), -34 + dx, y, dx === -2.4 || dx === 2.4 ? -43.57 : -43.72);
+  for (const [dx, h] of [[-3.2, 7.5], [0, 9.5], [3.2, 7.5]]) { const b = new THREE.Mesh(new THREE.TorusGeometry(0.93, 0.08, 6, 18), mat(0xc9a227)); b.rotation.x = Math.PI / 2; b.position.set(-34 + dx, h - 0.5, -44.6); scene.add(b); } }
 
 let decor = [];
 function addDecor(o) { scene.add(o); decor.push(o); return o; }
