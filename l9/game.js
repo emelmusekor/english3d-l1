@@ -2316,7 +2316,7 @@ function update(dt, t) {
   }
   if (nearNPC && started && !dlgOpen) {
     ui.prompt.style.display = 'block';
-    ui.prompt.innerHTML = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? ' 와 이야기하기 ❗' : ' 와 이야기하기');
+    ui.prompt.innerHTML = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? '에게 말 걸기 ❗' : '에게 말 걸기');
   } else ui.prompt.style.display = 'none';
   $('#actBtn').classList.toggle('ready', !!nearNPC);
 

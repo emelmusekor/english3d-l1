@@ -2102,7 +2102,7 @@ const myBus = () => Math.max(1, Math.min(L.classes || 6, S.cls || 1));
 // ---- 안전 점수: 100점에서 시작해요. 뛰면 깎이고, 50점 밑으로 내려가면 처음부터 다시 해요.
 //      차도에 들어가거나 차에 부딪히면 바로 처음부터 다시 시작해요. (자유 탐험에서는 적용하지 않아요)
 const RULE = Object.assign({ start: 100, min: 50, run: 5, esc: 10, wrong: 2 }, L.score || {});
-const scoreEl = (() => { try { const d = document.createElement('div'); d.className = 'pill'; d.id = 'safeBox'; d.innerHTML = '🛡️ 안전 <b id="safeN">100</b>점'; const q = $('#questBox'); q.parentElement.insertBefore(d, q); return d; } catch (e) { return null; } })();
+const scoreEl = (() => { try { const d = document.createElement('div'); d.className = 'pill'; d.id = 'safeBox'; d.innerHTML = '🛡️ <span class="lbl">안전 </span><b id="safeN">100</b><span class="lbl">점</span>'; const q = $('#questBox'); q.parentElement.insertBefore(d, q); return d; } catch (e) { return null; } })();
 const playing = () => S.stage < STAGES.length - 1;
 function scoreShow() { try { if (S.safe == null) S.safe = RULE.start; $('#safeN').textContent = Math.max(0, Math.round(S.safe)); scoreEl.classList.toggle('low', S.safe < RULE.min + 15); scoreEl.style.display = playing() ? '' : 'none'; } catch (e) {} }
 function penalty(kind) {
@@ -2870,7 +2870,7 @@ function update(dt, t) {
   }
   if (nearNPC && started && !dlgOpen) {
     ui.prompt.style.display = 'block';
-    ui.prompt.innerHTML = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? ' 와 이야기하기 ❗' : ' 와 이야기하기');
+    ui.prompt.innerHTML = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? '에게 말 걸기 ❗' : '에게 말 걸기');
   } else ui.prompt.style.display = 'none';
   $('#actBtn').classList.toggle('ready', !!nearNPC);
 
