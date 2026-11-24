@@ -119,11 +119,12 @@
   function myState() {
     var S = G.S || {};
     questRoll();
-    return { k: me.nick, n: me.num, av: myAvatar(), st: int(S.stage, 0, 6), s: int(S.stars, 0, 99999), h: Date.now() < helpUntil ? 1 : 0, qe: quest.e, qp: quest.p };
+    return { k: me.nick, n: me.num, av: myAvatar(), st: int(S.stage, 0, 6), s: int(S.stars, 0, 99999), h: Date.now() < helpUntil ? 1 : 0, qe: quest.e, qp: quest.p, pt: myPet() };
   }
+  function myPet() { try { var pp = window.PLAY && typeof window.PLAY.pet === 'function' ? window.PLAY.pet() : null; return pp ? int(pp.skin, 0, 2) + 1 : 0; } catch (e) { return 0; } }
   function cleanState(v) {
     if (!v || typeof v !== 'object') return null;
-    return { k: clean(v.k, 12) || '친구', n: int(v.n, 1, 99), av: cleanAv(v.av), st: int(v.st, 0, 6), s: int(v.s, 0, 99999), h: v.h ? 1 : 0, qe: int(v.qe, 0, 1e9), qp: int(v.qp, 0, 2) };
+    return { k: clean(v.k, 12) || '친구', n: int(v.n, 1, 99), av: cleanAv(v.av), st: int(v.st, 0, 6), s: int(v.s, 0, 99999), h: v.h ? 1 : 0, qe: int(v.qe, 0, 1e9), qp: int(v.qp, 0, 2), pt: int(v.pt, 0, 3) };
   }
 
   // ------------------------------------------------------------ 이 단원에서 주고받을 말
@@ -284,6 +285,7 @@
     if (p.st && G.started && !leaving && !silent && !quiet()) toast('👋 ' + esc(p.st.k) + iga(p.st.k) + ' 나갔어요.', 1800);
     unlist(p);
     if (p.g) { try { G.scene.remove(p.g); } catch (e) {} }
+    if (p.pet) { try { G.scene.remove(p.pet.g); } catch (e) {} p.pet = null; }
     if (followId === id) followId = null;
     delete peers[id];
     if (pendingOut && pendingOut.to === id) pendingOut = null;
@@ -937,6 +939,43 @@
 
   // ------------------------------------------------------------ 게임 쪽에서 부르는 것
   var nearFriend = null;
+
+  // ------------------------------------------------------------ 친구의 고양이 (친구가 길들인 고양이가 친구 옆을 따라다녀요)
+  function catModel(skin) {
+    try { if (window.PLAY && typeof window.PLAY.makeCat === 'function') { var c = window.PLAY.makeCat(skin); if (c) return c; } } catch (e) {}
+    // play.js 가 없을 때를 위한 간단한 고양이
+    var g = new THREE.Group(), col = skin === 1 ? 0x9aa1a8 : 0xf08c2e, m = new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 });
+    var body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.34, 4, 10), m); body.rotation.x = Math.PI / 2; body.position.y = 0.3; g.add(body);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), m); head.position.set(0, 0.46, 0.27); g.add(head);
+    [-0.07, 0.07].forEach(function (x) { var e = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.1, 4), m); e.position.set(x, 0.6, 0.27); g.add(e); });
+    var tail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.36, 6), m); tail.position.set(0, 0.45, -0.3); tail.rotation.x = -0.5; g.add(tail);
+    [[-0.08, 0.15], [0.08, 0.15], [-0.08, -0.15], [0.08, -0.15]].forEach(function (q) { var l = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6), m); l.position.set(q[0], 0.1, q[1]); g.add(l); });
+    g.userData.pose = function (tt, mode) { tail.rotation.z = Math.sin(tt * 3) * 0.4; body.position.y = mode === 'sit' ? 0.24 : 0.3 + Math.abs(Math.sin(tt * (mode === 'run' ? 14 : 9))) * 0.03; };
+    return g;
+  }
+  function petTick(p, dt, t) {
+    var want = p.st && p.st.pt && p.has && !p.away ? p.st.pt : 0;
+    if (!want) { if (p.pet) { try { G.scene.remove(p.pet.g); } catch (e) {} p.pet = null; } return; }
+    if (!p.pet || p.pet.kind !== want) {
+      if (p.pet) { try { G.scene.remove(p.pet.g); } catch (e) {} }
+      var g = catModel(want - 1); if (!g) return;
+      g.traverse(function (o) { o.userData.ns = 1; });
+      var side = -0.9, s0 = Math.sin(p.yaw), c0 = Math.cos(p.yaw);
+      g.position.set(p.x - s0 * 0.9 + c0 * side, 0, p.z - c0 * 0.9 - s0 * side);
+      try { var hs = G.textSprite('❤️', 0.3, { fs: 64, bg: null }); hs.position.y = 0.95; g.add(hs); } catch (e) {}
+      G.scene.add(g); p.pet = { g: g, kind: want, mode: 'sit' };
+    }
+    var c = p.pet, s = Math.sin(p.yaw), co = Math.cos(p.yaw);
+    // 친구의 왼쪽 조금 뒤에 서요
+    var tx = p.x + co * 0.85 + s * 0.55, tz = p.z - s * 0.85 + co * 0.55;
+    var dx = tx - c.g.position.x, dz = tz - c.g.position.z, d = Math.hypot(dx, dz);
+    if (d > 8) { c.g.position.x = tx; c.g.position.z = tz; d = 0; }
+    var sp = d > 0.25 ? Math.min(d, Math.max(1.6, d * 3) * dt) : 0;
+    if (sp > 0) { c.g.position.x += dx / d * sp; c.g.position.z += dz / d * sp; c.g.rotation.y = Math.atan2(dx, dz); }
+    else { var ry = p.yaw + Math.PI, dr = Math.atan2(Math.sin(ry - c.g.rotation.y), Math.cos(ry - c.g.rotation.y)); c.g.rotation.y += dr * Math.min(1, dt * 3); }
+    c.mode = d > 2.2 ? 'run' : d > 0.3 ? 'walk' : 'sit';
+    try { if (c.g.userData.pose) c.g.userData.pose(t, c.mode); } catch (e) {}
+  }
   function tick(dt, t) {
     if (!me) return;
     var P = G.P, best = null, bd = NEAR, nowMs = Date.now();
@@ -959,6 +998,7 @@
         }
       } catch (e) {}
       if (p.bubble && (p.bubbleT -= dt) <= 0) { p.g.remove(p.bubble); p.bubble = null; }
+      try { petTick(p, dt, t); } catch (e) {}
       p.d = Math.hypot(p.x - P.x, p.z - P.z);
       if (p.st && !p.away && p.d < bd) { bd = p.d; best = p; }
       // 도와 달라는 친구에게 가면
@@ -1013,8 +1053,8 @@
     map: drawMap,
     emote: emote,
     debug: function () {
-      return { status: status, strat: STRATS[stratI], buddy: buddy, stickers: stickerCount(), invite: invite && invite.kind, rps: !!rps, rpsIn: !!rpsIn, room: me ? roomId() : '', sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
-        peers: peerList().map(function (p) { return { id: p.id, k: p.st && p.st.k, n: p.st && p.st.n, av: p.st && p.st.av, d: r2(p.d), st: p.st && p.st.st, s: p.st && p.st.s, h: p.st && p.st.h, x: r2(p.tx), z: r2(p.tz), has: p.has, away: p.away, vis: !!(p.g && p.g.visible) }; }) };
+      return { myPet: myPet(), status: status, strat: STRATS[stratI], buddy: buddy, stickers: stickerCount(), invite: invite && invite.kind, rps: !!rps, rpsIn: !!rpsIn, room: me ? roomId() : '', sum: groupSum(), pendingIn: !!pendingIn, pendingOut: !!pendingOut, quest: (function () { var q = questInfo(); return { e: quest.e, type: quest.e % QUESTS.length, p: quest.p, sum: q.sum, goal: q.goal, done: q.done }; })(), follow: followId,
+        peers: peerList().map(function (p) { return { pet: p.st && p.st.pt, petShown: !!p.pet, id: p.id, k: p.st && p.st.k, n: p.st && p.st.n, av: p.st && p.st.av, d: r2(p.d), st: p.st && p.st.st, s: p.st && p.st.s, h: p.st && p.st.h, x: r2(p.tx), z: r2(p.tz), has: p.has, away: p.away, vis: !!(p.g && p.g.visible) }; }) };
     },
     _test: isDev ? { menu: function () { var p = liveList()[0]; if (p) openFriendMenu(p); }, rps: function () { var p = liveList()[0]; if (p) openRps(p); }, sticker: function () { var p = liveList()[0]; if (p) openSticker(p); }, photo: takePhoto, buddyAsk: function () { var p = liveList()[0]; if (p) askBuddy(p); }, incoming: openIncoming, openAsk: function () { var p = liveList()[0]; if (p) openAsk(p); }, openAnswer: openAnswer, pick: function (i) { if (panelKeys && panelKeys[i]) panelKeys[i].click(); }, group: openGroupPanel, leave: function () { leave(); status = 'off'; }, askN: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) openAsk(p); }, follow: function (n) { var p = liveList().filter(function (x) { return x.st.n === n; })[0]; if (p) startFollow(p); }, questType: function (ty) { qEpoch = function () { return ty; }; questRoll(); quest.done = false; quest.p = 0; } } : null
   };
