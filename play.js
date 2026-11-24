@@ -1,4 +1,5 @@
 /* 영어 3D · 놀이 층 (모든 단원이 같이 써요) — 물건과의 상호작용
+ * [4차] 롯데월드 단원(L13)에서는 전용 모드로 켜져요: 진짜 놀이기구(회전목마·자이로드롭·후룸라이드·풍선비행·모노레일)에 타고, 관문은 이 단원의 영어 표현 문제와 안전 문제를 섞어서 내요(window.__lw.englishQuiz / safetyQuiz).
  * [3차] 관문은 한 번뿐이에요(틀리면 그 도전은 끝, 보석은 그대로. 다시 E 하면 다른 문제). 간판(이름+💎값)·바닥 고리, 연·낚시·농구·보물 상자와 단원 놀이가 하나씩 더 있어요.
  * [2차] 💎 보석(fun.js 가 센 '모은 수 − 쓴 수')을 내고, 그 단원 영어 표현을 맞혀야 탈 수 있어요(공 차기·벤치는 무료). 단원마다 그 단원 표현으로 하는 놀이가 두 가지씩 있어요(L2 푸드 트럭 등).
  * ✈️ 비행기 타기 · ⚽ 공 차기(골대) · ⛲ 분수(동전 던지고 소원 빌기·무지개) · 🪑 벤치에 앉기 · 그네 · 트램펄린 ·
@@ -28,7 +29,7 @@ if (qs.has('autotest')) {
   }
   return;
 }
-if (qs.has('noplay') || !(G.lessonNo >= 1 && G.lessonNo <= 12)) return;
+if (qs.has('noplay') || !((G.lessonNo >= 1 && G.lessonNo <= 12) || (G.lessonNo === 13 && window.__lw))) return; // 13 = 롯데월드 단원(전용 모드)
 const THREE = window.THREE, P = G.P, CAM = G.CAM, scene = G.scene, camera = G.camera, keys = G.keys;
 let errN = 0;
 const warn = (e) => { if (errN++ < 8) try { console.warn('play.js', e); } catch (er) {} };
@@ -229,6 +230,7 @@ function buildGrid() {
   // 장면에 있는 것들: 사람·미션 물건은 빼요(미션마다 자리가 달라서 → AVOID 표와 '잠깐 비키기'가 맡아요)
   scene.updateMatrixWorld(true);
   const skip = new Set(); for (const id in G.NPC) skip.add(G.NPC[id].g); for (const it of G.items) if (it.mesh) skip.add(it.mesh);
+  if (G.lessonNo === 13) for (const id in G.NPC) { const q = G.NPC[id].g.position; gridRect(occ, q.x - 2, q.x + 2, q.z - 2, q.z + 2); } // 롯데월드: 지금 서 있는 사람들 자리는 피해서 놓아요
   const b = new THREE.Box3();
   const walk = (o) => {
     if (!o.visible || o.isSprite || o.isPoints || o.isInstancedMesh || o.isLight || skip.has(o) || o === CAM.me) return;
@@ -239,11 +241,11 @@ function buildGrid() {
       b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
       const w = b.max.x - b.min.x, d = b.max.z - b.min.z, basic = m && m.isMeshBasicMaterial;
       const flat = !basic && b.max.y <= 0.22 && b.max.y > 0.005 && w < 200 && d < 200, lane = flat && Math.min(w, d) <= 10 && Math.max(w, d) >= 22;
-      if (lane) gridRect(path, b.min.x, b.max.x, b.min.z, b.max.z); // 좁고 긴 길
+      if (lane && G.lessonNo !== 13) gridRect(path, b.min.x, b.max.x, b.min.z, b.max.z); // 좁고 긴 길 (롯데월드는 바닥이 모두 깔려 있어서 따지지 않아요)
       else if (flat && w * d >= 700) gridRect(pave, b.min.x, b.max.x, b.min.z, b.max.z); // 넓게 깔린 마당
       if (w < 70 && d < 70 && Math.abs(b.min.x + b.max.x) < 104 && Math.abs(b.min.z + b.max.z) < 104 && b.max.y > 0.005 && b.min.y < 30 && !(basic && m.transparent && !m.map) && !(basic && !m.map && w < 1.5 && d < 1.5)) {
-        if (b.max.y > 0.22) { gridRect(occ, b.min.x - 0.2, b.max.x + 0.2, b.min.z - 0.2, b.max.z + 0.2); gridRect(hgt, b.min.x - 0.3, b.max.x + 0.3, b.min.z - 0.3, b.max.z + 0.3, b.max.y); }
-        else if (!basic && !lane && w * d < 700) gridRect(occ, b.min.x - 0.2, b.max.x + 0.2, b.min.z - 0.2, b.max.z + 0.2); // 낮게 깔린 것: 방 바닥·빙판·연못 같은 곳
+        if (b.max.y > 0.22) { if (!(G.lessonNo === 13 && b.min.y > 3.5)) gridRect(occ, b.min.x - 0.2, b.max.x + 0.2, b.min.z - 0.2, b.max.z + 0.2); /* 롯데월드: 머리 위 선로·돔·열기구는 자리 찾기에서 빼요 */ gridRect(hgt, b.min.x - 0.3, b.max.x + 0.3, b.min.z - 0.3, b.max.z + 0.3, b.max.y); }
+        else if (!basic && !lane && w * d < 700 && G.lessonNo !== 13) gridRect(occ, b.min.x - 0.2, b.max.x + 0.2, b.min.z - 0.2, b.max.z + 0.2); // 낮게 깔린 것: 방 바닥·빙판·연못 같은 곳
       }
     }
     for (const c of o.children) walk(c);
@@ -347,7 +349,7 @@ function makeSigns() { // 멀리서도 보이는 간판: 그림 + 이름 + 💎�
   for (const th of ST.things) {
     if (!th.wantSign || th.sign) continue;
     const name = th.name || (th.kind === 'build' ? (G.FX2.snow ? '눈사람 만들기' : '모래성 만들기') : NAME[th.kind]) || SIGNNAME[th.kind] || '', free = !th.price;
-    const s = noRay(G.textSprite(th.emoji + ' ' + name + '\n' + (th.price ? '💎 ' + th.price : '무료'), 0.98, { fs: 46, bg: 'rgba(255,255,255,.96)', fg: '#1d3557', border: th.themed ? '#e76f51' : free ? '#2b8a3e' : '#1c7ed6', pad: 18 }));
+    const s = noRay(G.textSprite(th.emoji + ' ' + name + '\n' + (th.signLine || (th.price ? '💎 ' + th.price : '무료')), 0.98, { fs: 46, bg: 'rgba(255,255,255,.96)', fg: '#1d3557', border: th.themed ? '#e76f51' : free ? '#2b8a3e' : '#1c7ed6', pad: 18 }));
     s.material.toneMapped = false; s.material.depthWrite = false; const a = th.signAt || [];
     s.position.set(a[0] == null ? th.x : a[0], th.signY, a[1] == null ? th.z : a[1]); scene.add(s); th.sign = s; th.objs.push(s); if (th.hidden) s.visible = false;
   }
@@ -373,6 +375,7 @@ function pose(g, kind, a1) {
   const a = g.userData.anim; if (!a) return;
   if (kind === 'sit') { a.legL.rotation.x = a.legR.rotation.x = -1.4; a.armL.rotation.x = a.armR.rotation.x = -0.4; }
   else if (kind === 'swing') { a.legL.rotation.x = a.legR.rotation.x = -1.15 + (a1 || 0) * 0.7; a.armL.rotation.x = a.armR.rotation.x = -2.2; a.armL.rotation.z = -0.25; a.armR.rotation.z = 0.25; }
+  else if (kind === 'stand') { a.legL.rotation.x = a.legR.rotation.x = 0; a.armL.rotation.x = a.armR.rotation.x = -0.55; a.armL.rotation.z = -0.3; a.armR.rotation.z = 0.3; }
   else if (kind === 'scoot') { a.legL.rotation.x = 0; a.legR.rotation.x = 0.3; a.armL.rotation.x = a.armR.rotation.x = -1.0; a.armL.rotation.z = -0.1; a.armR.rotation.z = 0.1; }
   else if (kind === 'bike') { const s = Math.sin(a1 || 0) * 0.42; a.legL.rotation.x = -0.75 + s; a.legR.rotation.x = -0.75 - s; a.armL.rotation.x = a.armR.rotation.x = -1.15; a.armL.rotation.z = -0.16; a.armR.rotation.z = 0.16; }
 }
@@ -1082,7 +1085,7 @@ function tryUse(th) {
     fire('paid', { kind: th.kind, price }); th.use();
   };
   if (!ch || !LOCK) { go(); return true; } // 문제를 만들 수 없으면 값만 받아요
-  openGate({ title: th.emoji + ' ' + (th.name || NAME[th.kind] || ''), cost: price, specs: Array.isArray(ch) ? ch : [ch], ride: /^(plane|bike|scooter|swing|tramp|bus|carousel)$/.test(th.kind) }, go);
+  openGate({ title: th.emoji + ' ' + (th.name || NAME[th.kind] || '') + (ch && ch.titleAdd ? ' · ' + ch.titleAdd : ''), cost: price, specs: Array.isArray(ch) ? ch : [ch], ride: !!th.isRide || /^(plane|bike|scooter|swing|tramp|bus|carousel)$/.test(th.kind) }, go);
   return true;
 }
 
@@ -1147,7 +1150,7 @@ function closeGate(cancel) {
 function showStep() {
   const d = GATE.el, q = (c) => d.querySelector(c), s = GATE.specs[GATE.i], n = GATE.specs.length;
   GATE.done = false;
-  q('.pgTitle').textContent = GATE.title; q('.pgCost').textContent = GATE.cost ? '맞히면 💎 ' + GATE.cost + '개를 내고 해요' : '맞히면 할 수 있어요';
+  q('.pgTitle').textContent = GATE.title; q('.pgCost').textContent = GATE.cost ? (ST.lw && GATE.ride ? '맞히면 💎 ' + GATE.cost + '개로 순서표를 받아요' : '맞히면 💎 ' + GATE.cost + '개를 내고 해요') : '맞히면 할 수 있어요';
   q('.pgTag').textContent = (s.tag || '') + (n > 1 ? ' (' + (GATE.i + 1) + '/' + n + ')' : '') + ' · 기회는 한 번!';
   const pic = q('.pgPic'); pic.innerHTML = s.pic || ''; pic.style.display = s.pic ? '' : 'none';
   const en = q('.pgEn'); en.classList.toggle('pgEar', !s.en && !!s.say); en.textContent = s.en || (s.say ? '🔊 잘 들어 보세요' : ''); en.style.display = s.en || s.say ? '' : 'none';
@@ -1158,12 +1161,12 @@ function showStep() {
   const wrongHit = (b) => { // 틀리면 이 도전은 끝: 정답을 잠깐 보여 주고 닫아요 (보석은 그대로)
     if (GATE.done) return; GATE.done = true; G.beep('bad'); if (s.qid) qMiss(s.qid, true);
     GATE.btns.forEach(x => { x.disabled = true; if (x.dataset.r) x.classList.add('right'); }); if (b) b.classList.add('wrong');
-    hint.classList.add('no'); hint.textContent = '❌ 아쉬워요! 정답: ' + (s.order ? s.order.join(' ') : s.right);
-    fire('fail', { title: GATE.title });
+    hint.classList.add('no'); hint.textContent = '❌ 아쉬워요! 정답: ' + (s.order ? s.order.join(' ') : s.right) + (s.failWhy ? ' — ' + s.failWhy : '');
+    fire('fail', { title: GATE.title }); if (s.sayFail && s.after) sayAll(s.after, '나');
     setTimeout(safe(() => {
       if (!GATE.open) return; const ride = GATE.ride; closeGate(false);
       G.toast('😢 아쉬워요! 이번에는 못 ' + (ride ? '탔어요' : '했어요') + '<br><small>보석은 그대로예요 · 다시 도전하려면 ' + eKey() + '</small>', 3200);
-    }), 2000);
+    }), s.failWhy ? 3600 : 2000);
   };
   if (s.order) { // 낱말 순서 맞추기
     const ans = document.createElement('div'); ans.className = 'orderAns'; ch.appendChild(ans);
@@ -1197,7 +1200,7 @@ function stepDone(s) {
     if (!GATE.open) return;
     if (++GATE.i < GATE.specs.length) { showStep(); return; }
     const f = GATE.onPass; closeGate(false); if (f) f();
-  }), clamp(ms * 0.75, 900, 3000));
+  }), Math.max(s.hold || 0, clamp(ms * 0.75, 900, 3000)));
 }
 addEventListener('keydown', safe((e) => {
   if (!GATE.open) return;
@@ -2183,6 +2186,7 @@ function decoModel(id) {
   if (id === 'crown') { const gold = 0xffd43b; add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.19, 0.11, 14, 1, true), mat(gold)), 0, 0.31, 0, g); for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; cone(0.05, 0.13, gold, Math.cos(a) * 0.185, 0.42, Math.sin(a) * 0.185, g, 4); sph(0.026, [0xe03131, 0x339af0, 0x51cf66][i % 3], Math.cos(a) * 0.2, 0.32, Math.sin(a) * 0.2, g); } }
   else if (id === 'tophat') { cyl(0.32, 0.32, 0.025, 0x212529, 0, 0.27, 0, g, 18); cyl(0.19, 0.2, 0.3, 0x212529, 0, 0.42, 0, g, 16); flatZ(tor(0.2, 0.02, 0xe03131, 0, 0.3, 0, g)); }
   else if (id === 'ribbon') { for (const s of [-1, 1]) { ell(0.13, 1.3, 0.9, 0.5, 0xff8fab, s * 0.15, 0.33, 0.02, g).rotation.z = s * 0.5; ell(0.07, 0.7, 1.5, 0.4, 0xf06595, s * 0.08, 0.2, 0.06, g).rotation.z = -s * 0.3; } sph(0.06, 0xf06595, 0, 0.32, 0.03, g); }
+  else if (id === 'ears') { tor(0.3, 0.022, 0x343a40, 0, 0.02, 0, g, PI); for (const s of [-1, 1]) { ell(0.11, 1, 1, 0.5, 0x8d5a2b, s * 0.19, 0.3, 0, g); ell(0.065, 1, 1, 0.4, 0xffc9c9, s * 0.19, 0.3, 0.04, g); } ell(0.06, 1.6, 0.9, 0.5, 0xe03131, 0.07, 0.31, 0.03, g).rotation.z = 0.5; ell(0.06, 1.6, 0.9, 0.5, 0xe03131, -0.07, 0.31, 0.03, g).rotation.z = -0.5; sph(0.035, 0xc92a2a, 0, 0.31, 0.05, g); }
   else if (id === 'halo') { const h = flatZ(tor(0.2, 0.028, glow(0xffe066, 0.9), 0, 0.5, 0, g)); h.userData.ns = 1; for (let i = 0; i < 3; i++) sph(0.03, 0xffffff, Math.cos(i * 2.1) * 0.3, 0.52, Math.sin(i * 2.1) * 0.3, g); }
   else { flatZ(tor(0.27, 0.02, 0x40c057, 0, 0.16, 0, g)).rotation.x = PI / 2 - 0.25; for (let i = 0; i < 7; i++) { const a = -0.3 + i / 6 * (PI + 0.6); sph(0.055, [0xff8fab, 0xffd43b, 0xffffff, 0xda77f2][i % 4], Math.cos(a) * 0.27, 0.19 + Math.sin(a) * 0.07, Math.sin(a) * 0.27 * 0.25 + 0.02, g); } for (let i = 0; i < 7; i++) { const a = -0.3 + i / 6 * (PI + 0.6); sph(0.02, 0xffe066, Math.cos(a) * 0.3, 0.19 + Math.sin(a) * 0.075, 0.05, g); } }
   bake(g); return g;
@@ -2425,8 +2429,182 @@ THEME3[12] = () => {
   th.use = () => { th.busy = 2.6; hop(item, 0.4, 0.5, 2.25); tune([659, 880, 1175], 0.14); const w = th.W(0, 2.4, -0.3); burst(w[0], w[1], w[2], { n: 14, sp: 2.4, life: 0.8, size: 0.3, cols: [0xffd43b, 0xffffff, 0xff8fab], g: 2 }); cheer(th, null, '🧣 두 친구의 생각을 잘 들었어요!', 2600); };
 };
 
+// ================= 4차: 롯데월드 단원(L13) 전용 놀이 =================
+// - 세계(build/l13_*)가 내준 window.__lw 의 진짜 놀이기구(회전목마·자이로드롭·후룸라이드·풍선비행·모노레일)에 태워 줘요.
+// - 관문은 이 단원의 영어 표현 문제(__lw.englishQuiz)와 안전 문제(__lw.safetyQuiz)를 섞어서 하나(영어 2 : 안전 1). 기회는 한 번, 틀려도 안전 점수는 그대로예요(엔진의 'miss' 를 부르지 않아요).
+// - 공원 안('park')에서, 입장한 뒤(미션 4부터)에만 탈 수 있어요. 타는 동안 나는 탑승장에 그대로 있고(구역·미션 판정에 안 걸려요) 카메라와 캐릭터만 기구를 따라가요.
+const LWX = window.__lw || null;
+const lwOpen = () => { try { return LWX.zone() === 'park' && LWX.mission().stage >= 3 && !LWX.mission().over; } catch (e) { return false; } };
+const lwV = new THREE.Vector3(), lwQ = new THREE.Quaternion();
+function lwSeat(node) { node.getWorldPosition(lwV); const x = lwV.x, y = lwV.y, z = lwV.z; node.getWorldQuaternion(lwQ); lwV.set(0, 0, 1).applyQuaternion(lwQ); return { x, y, z, h: Math.atan2(lwV.x, lwV.z) }; }
+function lwNear(x, z) { // (x, z) 에서 가장 가까운, 걸어서 갈 수 있는 빈 자리
+  for (let r = 0; r <= 5; r += 0.5) for (let a = 0; a < 6.28; a += 0.4) { const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; if (reachAt(px, pz) && !wallAt(px, pz)) return [px, pz]; if (!r) break; }
+  return [x, z];
+}
+const LWQ = /키 1\d\dcm|운휴|울타리 안쪽|안전바|높은 곳에서 갑자기|무서워서|대기 시간/; // 어느 기구에나 맞는 탑승 안전 문제
+function lwSpot(x, z, r) { const c = gcell(z) * GR.N + gcell(x); if (reachAt(x, z) && GR.dist[c] >= r + 0.3 && !tooClose(x, z, r, 0.5)) { ST.placed.push({ x, z, r }); return { x, z }; } return spot(r, { near: [x, z], nearW: 1.2 }); }
+const LWE = { lwcaro: /merry-go-round/, lwdrop: /Gyro Drop/, lwflume: /fun|think/, lwballoon: /taller|field trip/, lwmono: /get to|Where/, lwphoto: /grade|field trip/, lwband: /would you like|sad/ }; // 그 자리에 어울리는 영어 표현 먼저
+function lwEng(th) { // 이 단원의 영어 대화(6학년 교과서 표현) 한 문제. 한 번 나온 표현은 다 돌 때까지 다시 안 나와요
+  let all = []; try { all = (LWX.englishQuiz ? LWX.englishQuiz() || [] : []).filter(q => q && q.q && Array.isArray(q.a) && q.a.length >= 2); } catch (e) { warn(e); }
+  if (!all.length) return null; const st = DAY.lwq, re = LWE[th.kind];
+  let cand = all.filter(q => st.seen.indexOf(q.a[0]) < 0); if (!cand.length) { st.seen = st.seen.slice(-1); cand = all.filter(q => st.seen.indexOf(q.a[0]) < 0); if (!cand.length) cand = all; }
+  const pref = re ? cand.filter(q => re.test(q.q + ' ' + q.a[0])) : [], q = pref.length ? pref[rndI(pref.length)] : cand[rndI(cand.length)]; st.seen.push(q.a[0]);
+  const m = /^([^가-힣]+?)\s*\(([^()]*)\)\s*$/.exec(q.q), book = q.book || '교과서', why = q.why || ('📗 ' + book + ' 표현');
+  const sp = { tag: '영어 문제', titleAdd: '📗 ' + book + ' 표현', choices: q.a.slice(0, 3), right: q.a[0], after: [q.a[0]], afterKo: why, failWhy: why, sayFail: 1, hold: 2600 };
+  if (m) { sp.en = m[1].trim(); sp.ko = esc(m[2]) + '<br><small>알맞은 대답을 골라요</small>'; sp.say = [sp.en]; } // 영어 질문: 읽어 주고, 뜻은 작게
+  else sp.ko = '<b style="font-size:20px;line-height:1.4">' + esc(q.q) + '</b>';                                  // 상황: 알맞은 영어 문장 고르기
+  return sp;
+}
+function lwQuiz(th, re) { // 영어 표현 문제와 안전 문제를 섞어서 내요 (영어 · 영어 · 안전 …). 안전 문제는 그 기구에 맞는 것부터 돌아가며
+  if (!DAY.lwq || !Array.isArray(DAY.lwq.seen)) DAY.lwq = { n: 0, seen: [] }; const k = DAY.lwq.n++ % 3; let e = null;
+  if (k !== 2) { e = lwEng(th); saveDay(); if (e) return e; } else saveDay();
+  const all = (LWX.safetyQuiz() || []).filter(q => q && q.q && Array.isArray(q.a) && q.a.length >= 2); let pool = all.filter(q => re.test(q.q)); if (pool.length < 2) pool = all.filter(q => LWQ.test(q.q)); if (pool.length < 2) pool = all;
+  if (!pool.length) return lwEng(th); const q = pool[pickI(th, pool.length)];
+  return { tag: '안전 문제', pic: th.emoji + ' ' + esc(th.name), ko: '<b style="font-size:20px;line-height:1.4">' + esc(q.q) + '</b>', choices: q.a.slice(0, 3), right: q.a[0], afterKo: q.why || '안전하게 즐겨요!', failWhy: q.why || '', hold: 2800 };
+}
+function lwThing(kind, emoji, name, at, price, re) {
+  const th = thing(kind, emoji, at[0], at[1], { own: false, verb: '타기', useR: 3.2, themed: 1, price, name, isRide: 1, signLine: '순서표 💎 ' + price });
+  th.challenge = () => lwQuiz(th, re);
+  th.canUse = () => { if (!lwOpen()) { G.toast('🎟️ 롯데월드에 입장한 뒤(미션 4부터)에 할 수 있어요', 2600); G.beep('bad'); return false; } return !th.closed || th.closed(); };
+  th.label = () => th.busy > 0 ? null : name + (lwOpen() ? '' : ' 🔒');
+  return th;
+}
+function lwEnd(r, early, silent) {
+  const th = r.th, o = th.o; ST.ride = null; unseat(); if (CAM.me) CAM.me.visible = CAM.third; if (!silent) blink();
+  if (CAM.iso) { CAM.tx = P.x; CAM.tz = P.z; } P.jy = 0; P.vy = 0; th.busy = 2;
+  if (o.onEnd) o.onEnd(r, early);
+  if (silent) { fire('leave', { kind: th.kind }); return; } // 미션 대화가 열려서 내린 것: 말없이
+  G.beep(early ? 'click' : 'ok');
+  G.toast(early ? '🙋 캐스트에게 알려서, 기구가 멈춘 뒤에 안전하게 내렸어요' : '🛑 <b>완전히 멈춘 뒤</b>에 내려요<br><small>두고 내린 물건이 없는지 살펴봐요</small>', 3200);
+  fire('leave', { kind: th.kind });
+}
+function lwRide(th, o) { // o: { node, seatY, pose, hide, cam: 'fixed' | 'chase', camAt, off:[옆, 위, 앞], dur, start, tip, onStart, onStep, onEnd }
+  th.o = o;
+  th.use = () => {
+    if (ST.ride) leave(true);
+    const r = ST.ride = { kind: 'lw', th, t: 0, wait: !!o.wait, tx: P.x, tz: P.z, cy: null, sy: null, tip: false }; P.jy = 0; P.vy = 0;
+    if (!r.wait) { blink(); G.beep([[523, .07], [659, .07], [784, .12]]); tell(th.kind, o.start, 3800); } else G.toast(o.waitMsg || '잠깐 기다려요…', 2400);
+    if (o.onStart) o.onStart(r); fire('ride', { kind: th.kind });
+  };
+  th.step = (r, dt) => {
+    const now = performance.now() / 1000; if (r.t0 == null) r.t0 = now; r.t = now - r.t0;
+    if (r.wait) { if (o.wait(r) || r.t > 9) { r.wait = false; r.t = 0; r.t0 = now; blink(); G.beep([[523, .07], [659, .07], [784, .12]]); tell(th.kind, o.start, 3800); } return; }
+    if (!r.tip && o.tip && r.t > o.dur * 0.42) { r.tip = true; G.toast(o.tip, 2800); }
+    if (o.onStep ? o.onStep(r, dt) : r.t >= o.dur) lwEnd(r, false);
+  };
+}
+function lwCam(r, dt) {
+  const o = r.th.o, s = lwSeat(o.node), g = CAM.me, now = performance.now() / 1000; dt = r.ct ? Math.min(0.25, now - r.ct) : dt; r.ct = now;
+  if (g) { if (CAM.third && !o.hide) { seatAvatar(o.node, o.seatY, o.pose || 'sit'); g.visible = true; } else g.visible = false; }
+  r.sy = r.sy == null ? s.y : r.sy + (s.y - r.sy) * Math.min(1, dt * (o.yk || 4.5));                      // 높이는 부드럽게 따라가요 (떨어질 때 화면이 덜 흔들리게)
+  r.cy = r.cy == null ? s.h : r.cy + angDiff(s.h, r.cy) * Math.min(1, dt * 1.4);                // 방향도 천천히
+  const look = (cx, cy, cz, tx, ty, tz) => { const dx = tx - cx, dy = ty - cy, dz = tz - cz; camera.position.set(cx, cy, cz); camera.rotation.set(Math.atan2(dy, hyp(dx, dz)), Math.atan2(-dx, -dz), 0); };
+  if (CAM.iso) { // 2.5D: 엔진과 같은 각도·같은 카메라 높이로 따라가요
+    const yaw = o.isoYaw != null ? o.isoYaw : CAM.isoYaw, pit = -0.98, cp = Math.cos(pit), sp = Math.sin(pit), sy = Math.sin(yaw), cy = Math.cos(yaw), k = Math.min(1, dt * 5);
+    r.tx += (s.x - r.tx) * k; r.tz += (s.z - r.tz) * k; const camY = 1 - sp * 30, dist = (camY - 1 - r.sy) / -sp;
+    camera.position.set(r.tx + sy * 2.2 + sy * cp * dist, camY, r.tz + cy * 2.2 + cy * cp * dist); camera.rotation.set(pit, yaw, 0);
+  } else if (!CAM.third) { camera.position.set(s.x, r.sy + (o.eye != null ? o.eye : o.seatY + 1.62), s.z); camera.rotation.set(-0.14, r.cy + PI, 0); } // 내 눈
+  else if (o.cam === 'fixed') look(o.camAt[0], o.camAt[1], o.camAt[2], s.x, r.sy + 0.4, s.z);     // 3D: 한 자리에서 지켜보는 카메라 (빙글빙글 돌지 않아요)
+  else { const f = o.off, fx = Math.sin(r.cy), fz = Math.cos(r.cy), rx = -fz, rz = fx; look(s.x + rx * f[0] + fx * f[2], r.sy + f[1], s.z + rz * f[0] + fz * f[2], s.x, r.sy + (o.ty != null ? o.ty : 0.5), s.z); } // 3D: 일정한 거리에서 따라가요
+}
+function lwKiosk(sp, c1, c2, emoji, to) { // 작은 탑승장 (둥근 지붕 매표소 + 승강기 문). to: 문이 보는 쪽
+  const g = grp(sp.x, sp.z, Math.atan2(to[0] - sp.x, to[1] - sp.z));
+  cyl(1.35, 1.45, 0.14, 0xdee2e6, 0, 0.07, 0, g, 20); cyl(0.95, 1.0, 1.9, c2, 0, 1.09, -0.2, g, 16); flatZ(tor(0.98, 0.06, c1, 0, 1.25, -0.2, g)); flatZ(tor(0.98, 0.06, c1, 0, 2.0, -0.2, g));
+  cone(1.3, 0.9, c1, 0, 2.5, -0.2, g, 16); sph(0.14, 0xffd43b, 0, 3.0, -0.2, g); for (let i = 0; i < 10; i++) sph(0.07, i % 2 ? 0xffffff : 0xffd43b, Math.cos(i * PI / 5) * 1.27, 2.08, -0.2 + Math.sin(i * PI / 5) * 1.27, g);
+  box(0.6, 1.2, 0.06, 0x343a40, 0, 0.75, 0.78, g); box(0.66, 0.08, 0.1, c1, 0, 1.4, 0.78, g); for (const s of [-1, 1]) { cyl(0.04, 0.04, 0.9, 0xadb5bd, s * 0.9, 0.5, 1.0, g, 6); sph(0.06, 0xffd43b, s * 0.9, 0.98, 1.0, g); }
+  bake(g); const e = emoSprite(emoji, 0.5); e.position.set(0, 1.72, 0.82); g.add(e); return g;
+}
+function lwFlood(x0, z0) { // 롯데월드 안(회전목마 앞)에서 걸어서 갈 수 있는 칸을 다시 세요 (학교에서 시작하면 공원 안은 버스를 타야 가니까요)
+  const N = GR.N, wall = GR.wall, reach = GR.reach = new Uint8Array(N * N), q = new Int32Array(N * N); let h = 0, tl = 0, s = -1; const ci = gcell(x0), cj = gcell(z0);
+  for (let R = 0; R <= 12 && s < 0; R++) for (let dj = -R; dj <= R && s < 0; dj++) for (let di = -R; di <= R; di++) { const a = ci + di, b = cj + dj; if (a >= 0 && b >= 0 && a < N && b < N && !wall[b * N + a]) { s = b * N + a; break; } }
+  if (s < 0) return; q[tl++] = s; reach[s] = 1;
+  while (h < tl) { const c = q[h++], a = c % N, b = (c / N) | 0; for (const k of [a > 0 ? c - 1 : -1, a < N - 1 ? c + 1 : -1, b > 0 ? c - N : -1, b < N - 1 ? c + N : -1]) if (k >= 0 && !wall[k] && !reach[k] && gpos((k / N) | 0) < -9.6) { reach[k] = 1; q[tl++] = k; } }
+}
+function initLW() {
+  if (!LWX) return false; buildGrid();
+  const C = LWX.CARO, MIX = LWX.MI, FL = LWX.FLUME, FX = LWX.LWFX;
+  lwFlood(C.x - 7, C.z);
+  // 🎠 회전목마: 바깥 줄 목마에 앉아 한두 바퀴
+  try { const horse = C.spin.children[1] || C.spin.children[0], node = dyn(horse, -0.03, 1.46, 0); node.rotation.y = PI / 2;
+    const at = lwNear(C.x - 5.9, C.z - 2.6), th = lwThing('lwcaro', '🎠', '회전목마', at, 1, /빙글빙글|회전목마|울타리 안쪽|무서워서|대기 시간/);
+    lwRide(th, { node, seatY: -0.66, cam: 'fixed', camAt: [C.x - 1.5, 3.6, C.z + 9.6], dur: 32, start: '🎠 회전목마 출발!<br><small>🔒 손잡이 봉을 꼭 잡아요 · ' + eKey() + ' 멈춰 주세요(내리기)</small>', tip: '🎠 타는 동안에는 일어서지 않고, 봉을 꼭 잡아요',
+      onStart: () => tune([523, 659, 784, 1046, 784, 659, 523, 659, 784, 1046, 1318, 1046], 0.34, 0.26) });
+    addSign(th, 3.0, at[0], at[1]); } catch (e) { warn(e); }
+  // 🗼 자이로드롭: 의자 고리에 앉아 천천히 올라갔다가 슝!
+  try { const ring = MIX.ring, seat = ring.children[1], node = dyn(seat, 0, -0.2, 0.24), X = MIX.drop[0], Z = MIX.drop[1];
+    const at = lwNear(X + 2.4, Z + 3.8), th = lwThing('lwdrop', '🗼', '자이로드롭', at, 3, /안전바|높은 곳에서 갑자기|키 1\d\dcm|운휴|무서워서/);
+    th.ly = ring.position.y; th.still = 0;
+    th.closed = () => { if (th.still > 1.2) { G.toast('🚧 자이로드롭은 지금 점검 중이에요. 조금 뒤에 다시 와요', 2600); return false; } return true; };
+    th.tick = (dt) => { th.still = Math.abs(ring.position.y - th.ly) < 1e-4 && ring.position.y > 3 ? th.still + dt : 0; th.ly = ring.position.y; };
+    lwRide(th, { node, seatY: -0.66, cam: 'chase', off: [4.2, 1.3, 5.2], yk: 7, dur: 22, wait: () => ring.position.y < 2.7, waitMsg: '🗼 키 130cm 이상 · 소지품은 보관함에!<br><small>의자가 내려오면 타요…</small>',
+      start: '🗼 <b>안전바가 내려가요 · 찰칵!</b><br><small>등을 붙이고 손잡이를 잡아요 · ' + eKey() + ' 멈춰 주세요(내리기)</small>', tip: '🗼 높은 곳에서 멈춰도 자리에 앉아 안내를 기다려요',
+      onStart: (r) => { r.n = 0; r.hi = false; },
+      onStep: (r) => { const y = ring.position.y; if (y > 14) r.hi = true; if (r.hi && y < 2.4) { r.hi = false; r.n++; G.beep([[220, .08], [150, .12]]); } return r.n >= 3 || r.t > 26; } });
+    addSign(th, 3.0, at[0], at[1]); } catch (e) { warn(e); }
+  // 🚣 후룸라이드: 통나무 보트를 타고 물길을 오가요 (끝에 첨벙)
+  try { const boat = FL.boat, node = dyn(boat, -0.2, 0.89, 0); node.rotation.y = PI / 2;
+    const at = lwNear(FL.x, -15.2), th = lwThing('lwflume', '🚣', '후룸라이드', at, 2, /후룸라이드|보트가|바닥이 젖어|울타리 안쪽/);
+    const splash = (big) => { const p = boat.position; burst(p.x, 0.6, p.z, { n: big ? 40 : 18, sp: big ? 5.5 : 3.5, life: big ? 1.3 : 0.8, size: big ? 0.42 : 0.3, cols: [0xd0ebff, 0xffffff, 0x74c0fc], g: 9 }); G.beep(big ? [[900, .04], [500, .08], [300, .14]] : [[800, .03], [500, .05]]); };
+    lwRide(th, { node, seatY: -0.66, cam: 'fixed', camAt: [FL.x, 4.6, -19.2], isoYaw: PI, dur: 18, start: '🚣 통나무 보트 출발!<br><small>🔒 손잡이를 잡고 바르게 앉아요 · 휴대폰·모자는 가방에 · ' + eKey() + ' 멈춰 주세요</small>', tip: '🚣 손발은 보트 안으로! 일어서지 않아요',
+      onStart: (r) => { r.turns = 0; r.edge = false; },
+      onStep: (r) => { const d = Math.abs(boat.position.x - FL.x); if (d > 4.6 && !r.edge) { r.edge = true; r.turns++; splash(r.turns >= 4); } else if (d < 3) r.edge = false; return r.turns >= 4 && d < 4.2 || r.t > 24; },
+      onEnd: (r, early) => { if (!early) emo('💦', P.x, 2.2, P.z, 0.8); } });
+    addSign(th, 3.0, at[0], at[1]); } catch (e) { warn(e); }
+  // 🎈 풍선비행: 열기구 바구니를 타고 돔 아래를 천천히
+  try { const b = FX.balloons[0].g, node = dyn(b, 0, -0.3, 0), sp = lwSpot(8, -26.5, 1.6);
+    if (sp) { const th = lwThing('lwballoon', '🎈', '풍선비행', [sp.x, sp.z], 2, /높은 곳에서 갑자기|운휴|울타리 안쪽|무서워서|대기 시간/); th.own = true; th.fp = [{ x: sp.x, z: sp.z, r: 1.4 }]; th.solidR = 1.05;
+      const k = lwKiosk(sp, 0xe03131, 0xfff5f5, '🎈', [14, -24]); th.g = k; th.objs.push(k);
+      node.scale.setScalar(0.62);
+      lwRide(th, { node, seatY: 0, pose: 'stand', eye: 0.62, ty: -0.2, cam: 'chase', off: [1.6, 1.5, -5.6], dur: 46, start: '🎈 풍선비행 출발! 돔 아래를 천천히 날아요<br><small>🔒 바구니 문을 닫았어요 · 몸을 밖으로 내밀지 않아요 · ' + eKey() + ' 내리기</small>', tip: '🎈 아래에 회전목마와 광장이 보여요. 바구니 안에서 구경해요' });
+      addSign(th, 3.9); } } catch (e) { warn(e); }
+  // 🚝 월드모노레일: 열차를 타고 광장 위를 한 바퀴
+  try { const car = FX.train[0].g, node = dyn(car, 0.2, 0.8, 0); node.rotation.y = PI / 2; const sp = lwSpot(-15, -39.5, 1.6);
+    if (sp) { const th = lwThing('lwmono', '🚝', '월드모노레일', [sp.x, sp.z], 2, /에스컬레이터|몰려들어|게이트 밖|높은 곳에서 갑자기|어깨가 닿기/); th.own = true; th.fp = [{ x: sp.x, z: sp.z, r: 1.4 }]; th.solidR = 1.05;
+      const k = lwKiosk(sp, 0x4263eb, 0xf1f6ff, '🚝', [-9, -34]); th.g = k; th.objs.push(k);
+      lwRide(th, { node, seatY: -0.66, hide: true, cam: 'chase', off: [0, 3.1, -7.5], dur: 57, start: '🚝 모노레일 출발! 광장 위를 한 바퀴 돌아요<br><small>🚪 문이 닫혀요 · 자리에 앉아 손잡이를 잡아요 · ' + eKey() + ' 내리기</small>', tip: '🚝 창밖으로 손을 내밀지 않아요. 내릴 때는 열차가 멈춘 뒤에!' });
+      addSign(th, 3.9); } } catch (e) { warn(e); }
+  // 📸 회전목마 앞 포토존: 내 캐릭터 사진 찍기
+  try { const sp = lwSpot(C.x - 10.5, C.z - 2, 1.5);
+    if (sp) { const th = lwThing('lwphoto', '📸', '포토존', [sp.x, sp.z], 1, /2시 50분|모이는 시각|보이지 않아요|안 보여요|어깨가 닿기/); th.own = true; th.fp = [{ x: sp.x, z: sp.z, r: 1.3 }]; th.verb = '찍기'; th.isRide = 0; th.signLine = '💎 1';
+      const g = grp(sp.x, sp.z, Math.atan2(C.x - sp.x, C.z - sp.z)); th.g = g; th.objs.push(g);
+      cyl(1.2, 1.3, 0.08, 0xffc9c9, 0, 0.04, 0, g, 20); for (const s of [-1, 1]) { cyl(0.06, 0.07, 2.3, 0xffd43b, s * 1.05, 1.15, -0.6, g, 8); sph(0.2, [0xe03131, 0x4dabf7][s > 0 ? 1 : 0], s * 1.05, 2.5, -0.6, g); sph(0.16, 0xffd43b, s * 1.25, 2.3, -0.6, g); }
+      const arch = tor(1.05, 0.07, 0xffd43b, 0, 2.3, -0.6, g, PI); arch.scale.y = 0.5; for (let i = 0; i < 7; i++) { const a = i / 6 * PI; sph(0.09, [0xff8fab, 0xffffff, 0x74c0fc][i % 3], Math.cos(a) * 1.05, 2.3 + Math.sin(a) * 0.52, -0.6, g); }
+      for (const a of [0.5, 2.6, 4.7]) { const l = cyl(0.025, 0.025, 1.3, 0x495057, Math.cos(a) * 0.25, 0.62, 1.0 + Math.sin(a) * 0.25, g, 5); l.rotation.z = Math.cos(a) * 0.35; l.rotation.x = -Math.sin(a) * 0.35; } box(0.36, 0.26, 0.22, 0x212529, 0, 1.36, 1.0, g); flatZ(cyl(0.09, 0.1, 0.14, 0x495057, 0, 1.36, 0.86, g, 10)); sph(0.04, 0xe03131, 0.12, 1.51, 1.0, g);
+      bake(g);
+      th.label = () => th.busy > 0 ? null : '포토존에서 사진 찍기' + (lwOpen() ? '' : ' 🔒');
+      th.use = () => { th.busy = 3; P.x = sp.x; P.z = sp.z; P.yaw = Math.atan2(C.x - sp.x, C.z - sp.z); G.beep([[1200, .03], [1600, .05]]); later(0.5, () => { blink(); let u = null; try { u = window.__mp && window.__mp.shot ? window.__mp.shot() : null; } catch (e) {} showPhoto(u); tell('lwphoto', '📸 찰칵! 회전목마 앞에서 한 장<br><small>우리 반 집합 장소도 여기예요</small>', 3200); }); fire('use', { kind: 'lwphoto' }); };
+      addSign(th, 3.4); } } catch (e) { warn(e); }
+  // 🎀 기념품 머리띠
+  try { const sp = lwSpot(36.5, -26.5, 1.5);
+    if (sp) { const th = lwThing('lwband', '🎀', '기념품 머리띠', [sp.x, sp.z], 3, /기념품|전화가 연결되지|모르는 어른|밀쿠폰|알레르기/); th.own = true; th.fp = [{ x: sp.x, z: sp.z, r: 1.3 }]; th.solidR = 0.8; th.verb = '사기'; th.isRide = 0; th.signLine = '💎 3';
+      const g = grp(sp.x, sp.z, 0); th.g = g; th.objs.push(g); // 남쪽(플라이벤처 가는 길)을 봐요
+      box(1.5, 0.75, 0.8, 0xffe3e3, 0, 0.62, 0, g); for (const s of [-1, 1]) { flatX(cyl(0.3, 0.3, 0.1, 0x495057, s * 0.8, 0.3, 0.2, g, 14)); cyl(0.035, 0.035, 1.5, 0xffffff, s * 0.7, 1.72, -0.35, g, 6); cyl(0.035, 0.035, 1.5, 0xffffff, s * 0.7, 1.72, 0.35, g, 6); } cap(0.04, 0.5, 0xadb5bd, 0.95, 0.9, -0.3, g).rotation.z = -0.9;
+      for (let i = 0; i < 6; i++) { const a = box(0.27, 0.05, 1.0, i % 2 ? 0xffffff : 0xf06595, -0.68 + i * 0.27, 2.5, 0, g); a.rotation.x = 0; } for (let i = 0; i < 6; i++) sph(0.06, i % 2 ? 0xffffff : 0xf06595, -0.68 + i * 0.27, 2.42, 0.5, g);
+      for (const [x, c] of [[-0.45, 0x8d5a2b], [0, 0xff8fab], [0.45, 0xffd43b]]) { const hb = tor(0.16, 0.022, 0x343a40, x, 1.2, 0.1, g, PI); void hb; for (const s of [-1, 1]) sph(0.075, c, x + s * 0.12, 1.36, 0.1, g); cyl(0.02, 0.03, 0.2, 0xadb5bd, x, 1.08, 0.1, g, 5); }
+      bake(g);
+      th.label = () => th.busy > 0 ? null : '기념품 머리띠 사기' + (lwOpen() ? '' : ' 🔒');
+      th.use = () => { th.busy = 3; const opts = ['ears', 'ribbon', 'flower', 'crown'].filter(d => d !== DAY.deco), d = opts[rndI(opts.length)], nm = { ears: '곰돌이 귀 머리띠', ribbon: '큰 리본', flower: '꽃 머리띠', crown: '왕관' }[d]; DAY.deco = d; saveDay(); decoTick(); G.beep('combo'); burst(P.x, 2.2, P.z, { n: 16, sp: 2.6, life: 0.9, size: 0.3, cols: [0xff8fab, 0xffd43b, 0xffffff], g: 2 }); tell('lwband', '🎀 <b>' + nm + '</b>를 샀어요! 오늘 하루 쓰고 다녀요<br><small>용돈은 필요한 만큼만 · 쓰레기는 쓰레기통에</small>', 3600); fire('use', { kind: 'lwband', deco: d }); };
+      addSign(th, 3.2); } } catch (e) { warn(e); }
+  try { makeSigns(); makeRings(); clearCover(); } catch (e) { warn(e); }
+  for (const th of ST.things) { if (!th.sign) continue; // 입장 전에는 간판 아래에 잠금 안내
+    const lk = noRay(G.textSprite(th.isRide ? '🔒 입장한 뒤에 탈 수 있어요' : '🔒 입장한 뒤에 할 수 있어요', 0.42, { fs: 40, bg: 'rgba(29,53,87,.9)', fg: '#ffffff', pad: 14 })); lk.material.toneMapped = false; lk.material.depthWrite = false; scene.add(lk); th.lockSign = lk; th.objs.push(lk);
+    lk.position.set(th.sign.position.x, th.sign.position.y - 0.82, th.sign.position.z); lk.visible = false; }
+  ST.lw = true; ST.lx = P.x; ST.lz = P.z;
+  return ST.things.length > 0;
+}
+function lwTick() { const open = lwOpen(); for (const th of ST.things) if (th.lockSign) th.lockSign.visible = !open && !th.hidden && !!(th.sign && th.sign.visible); }
+// 사진 보여 주기 (저장할 수 있어요)
+function showPhoto(url) {
+  if (!url) return; let d = document.getElementById('playPhoto');
+  if (!d) { d = document.createElement('div'); d.id = 'playPhoto'; d.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-2deg);background:#fff;padding:12px 12px 10px;border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.4);z-index:45;text-align:center;font-size:17px;color:#1d3557;max-width:86vw';
+    d.innerHTML = '<img alt="" style="display:block;width:min(460px,80vw);border-radius:6px"><div style="margin:8px 0 6px">📸 롯데월드 현장체험학습</div><a download="lotteworld.jpg" style="display:inline-block;background:#e76f51;color:#fff;border-radius:10px;padding:6px 14px;text-decoration:none;margin-right:6px">💾 저장</a><button type="button" style="border:0;background:#eef2f6;border-radius:10px;padding:7px 14px;font-size:16px;font-family:inherit;color:#1d3557">닫기</button>';
+    document.body.appendChild(d); d.querySelector('button').onclick = () => { d.style.display = 'none'; }; }
+  d.querySelector('img').src = url; d.querySelector('a').href = url; d.style.display = 'block'; clearTimeout(showPhoto.t); showPhoto.t = setTimeout(() => { d.style.display = 'none'; }, 9000);
+}
+
 // ---------------- 처음 한 번: 자리를 잡고 놀이 기구를 놓아요 ----------------
 function init() {
+  if (G.lessonNo === 13) return initLW(); // 롯데월드 단원은 전용 놀이만
   if (!buildGrid()) return false;
   FLY.H = clamp(GR.maxH + 2.6, 9, 16);
   // ✈️
@@ -2468,6 +2646,7 @@ function init() {
 function leave(silent) {
   const r = ST.ride; if (!r) return;
   if (r.kind === 'plane') { bail(r.th, silent); return; }
+  if (r.kind === 'lw') { lwEnd(r, true, silent); return; }
   ST.ride = null;
   if (roam(r)) { const th = r.th; th.park(P.x, P.z, CAM.me && CAM.third ? CAM.face : P.yaw + PI); th.g.visible = !th.hidden; th.away = 0; if (CAM.me) CAM.me.position.y = P.jy; }
   else if (r.kind === 'bus') { unseat(); busPark(r.th, r.th.at); P.jy = 0; P.vy = 0; G.collide(); } // 중간에 내리면 버스는 떠난 정류장으로 돌아가요
@@ -2494,13 +2673,15 @@ function drive(dt, t) {
   const r = ST.ride; if (!r || roam(r)) return false;
   if (r.kind === 'plane') { P.jy = 0; P.vy = 0; flyStep(r.th, dt); }
   else if (r.kind === 'bus') { P.jy = 0; P.vy = 0; busStep(r, dt); }
+  else if (r.kind === 'lw') { P.jy = 0; P.vy = 0; r.th.step(r, dt); }
   else if (P.jy > 0 || P.vy > 0) { P.jy = 0; P.vy = 0; leave(); return false; } // 앉아 있을 때 점프 = 일어나기
   return true;
 }
 // ③ 카메라: 비행기를 타는 동안만 맡아요
 function cam(dt, t) {
   if (ST.top) { const q = Array.isArray(ST.top) ? ST.top : [0, 1.5, 49 / Math.tan(camera.fov * PI / 360)]; camera.position.set(q[0], q[2], q[1]); camera.rotation.set(-PI / 2, 0, 0); return true; } // 개발용: 위에서 보기 (전체 또는 [x, z, 높이])
-  const r = ST.ride; if (!r || r.kind !== 'plane') return false;
+  const r = ST.ride; if (r && r.kind === 'lw') { if (r.wait) return false; lwCam(r, dt); return true; }
+  if (!r || r.kind !== 'plane') return false;
   planeCam(r.th, dt); return true;
 }
 // ④ 지도
@@ -2516,11 +2697,11 @@ function map(mctx, tx, tz) {
 // ---------------- 매 프레임 ----------------
 function conflicts() { // 미션 사람·물건·목표가 놀이 기구 자리에 오면 그 기구는 잠깐 비켜요
   const pts = [];
-  for (const id in G.NPC) { const n = G.NPC[id]; if (n.g.visible && !n.follow) pts.push(n.g.position.x, n.g.position.z); }
+  for (const id in G.NPC) { const n = G.NPC[id]; if (n.g.visible && !n.follow && (!ST.lw || n.talk || (n.g.userData.mark && n.g.userData.mark.visible))) pts.push(n.g.position.x, n.g.position.z); } // 롯데월드: 모둠 친구들은 늘 곁에 있으니, 말을 걸 수 있는 미션 사람만 따져요
   const its = G.items; for (let i = 0; i < its.length; i++) if (its[i].alive) pts.push(its[i].x, its[i].z);
   try { const o = G.objective, p = o && o.pos && o.pos(); if (p) pts.push(p[0], p[1]); } catch (e) {}
   for (const th of ST.things) {
-    if (!th.own || !th.fp.length || (ST.ride && ST.ride.th === th)) continue;
+    if (!th.own || th.noHide || !th.fp.length || (ST.ride && ST.ride.th === th)) continue;
     let hit = false;
     for (const c of th.fp) { for (let k = 0; k < pts.length; k += 2) if (hyp(pts[k] - c.x, pts[k + 1] - c.z) < c.r + 0.3) { hit = true; break; } if (hit) break; }
     if (hit) { th.clearT = 0; if (!th.hidden) setHidden(th, true); }
@@ -2530,7 +2711,7 @@ function conflicts() { // 미션 사람·물건·목표가 놀이 기구 자리�
 function hud() {
   const pr = G.prompt, act = ST.act; let html = null, verb = null; const r = ST.ride;
   if (G.started && !G.dlgOpen) {
-    if (r && !roam(r)) { if (r.kind === 'plane' || !missionNear()) { html = ({ plane: '비행기에서 바로 내리기', swing: '그네에서 내리기', bus: '버스에서 내리기', carousel: '회전목마에서 내리기' })[r.kind] || '벤치에서 일어나기'; verb = '내리기'; } }
+    if (r && !roam(r)) { if (r.kind === 'plane' || !missionNear()) { html = ({ plane: '비행기에서 바로 내리기', swing: '그네에서 내리기', bus: '버스에서 내리기', carousel: '회전목마에서 내리기', lw: '멈춰 주세요 (내리기)' })[r.kind] || '벤치에서 일어나기'; verb = '내리기'; } }
     else if (!missionNear()) {
       if (ST.tgt) { html = ST.tgt.lab; verb = ST.tgt.th.verb; }
       else if (r && !G.nearNPC) { html = r.kind === 'bike' ? '자전거에서 내리기' : '킥보드에서 내리기'; verb = '내리기'; }
@@ -2560,7 +2741,7 @@ function tick(dt, t) {
   twTick(dt);
   const r0 = ST.ride;
   if (r0 && !roam(r0) && (G.dlgOpen || G.busy)) leave(true); // 대화가 열리면 바로 내려요
-  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); decoTick(); signCull(); }
+  if ((ST.confT += dt) > 0.4) { ST.confT = 0; conflicts(); decoTick(); signCull(); if (ST.lw) lwTick(); }
   // 내 속도 (공 차기용)
   const sx = P.x - ST.lx, sz = P.z - ST.lz; ST.lx = P.x; ST.lz = P.z;
   if (dt > 1e-4 && hyp(sx, sz) < 2) { ST.pvx = sx / dt; ST.pvz = sz / dt; } else { ST.pvx = ST.pvz = 0; }
@@ -2608,9 +2789,9 @@ function tick(dt, t) {
   for (const th of ST.things) if (th.sign && th.sign.visible) th.sign.position.y = th.signY + Math.sin(t * 2 + th.ph) * 0.08;
   hud();
   // 오늘 처음: 놀 거리가 있다고 한 번 알려요
-  if (G.started && !DAY.hi[G.lessonNo] && ST.things.length && !ST.used) {
+  if (G.started && !DAY.hi[G.lessonNo] && ST.things.length && !ST.used && (!ST.lw || lwOpen())) {
     if (!G.dlgOpen && !G.busy && !ST.ride) ST.hiT += dt;
-    if (ST.hiT > 15) { DAY.hi[G.lessonNo] = 1; saveDay(); G.toast('✈️ 🎣 🪁 마을 곳곳에 놀 거리가 있어요!<br><small>💎 보석을 내고 영어 문제를 한 번에 맞히면 탈 수 있어요 · 지도에서 그림을 찾아가 봐요</small>', 4800); }
+    if (ST.hiT > 15) { DAY.hi[G.lessonNo] = 1; saveDay(); G.toast(ST.lw ? '🎠 🗼 🚣 이제 놀이기구를 탈 수 있어요!<br><small>영어·안전 문제를 한 번에 맞히고 💎 보석으로 순서표를 받아요</small>' : '✈️ 🎣 🪁 마을 곳곳에 놀 거리가 있어요!<br><small>💎 보석을 내고 영어 문제를 한 번에 맞히면 탈 수 있어요 · 지도에서 그림을 찾아가 봐요</small>', 4800); }
   }
 }
 G.tickers.push(safe(tick));
