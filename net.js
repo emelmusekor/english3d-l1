@@ -123,9 +123,9 @@
           if (queue.length) setTimeout(function () { flush(true); }, 300);
           return;
         }
-        if (res.error === 'noclass' || res.error === 'closed' || res.error === 'bad') {
+        if (res.error === 'noclass' || res.error === 'closed' || res.error === 'bad' || res.error === 'full') { // full: 서버 기록장이 가득 참 → 더 보내지 않아요(게임은 그대로)
           // 다시 보내도 안 되는 기록은 버려요
-          var dead = res.error === 'bad' ? b.items : queue.filter(function (q) { return q.c === b.body.code; });
+          var dead = (res.error === 'bad' || res.error === 'full') ? b.items : queue.filter(function (q) { return q.c === b.body.code; });
           removeItems(dead);
           if (profile && profile.code === b.body.code) {
             if (res.error === 'noclass') { setProfile(null); note = '반이 없어져서 혼자 하기로 바뀌었어요.'; }
