@@ -298,3 +298,323 @@ body.touch #mpChip.show~#mpEmoBtn{display:block}
 #decoPick .dpHow:empty{display:none}
 /* 선생님 코드로 미션 건너뛰기 (도움말 안) */
 #skipBox{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:#f4f1ff;border:2px dashed #b197fc;font-size:15px;text-align:left;line-height:1.5}#skipBox span{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}#skipBox input{width:110px;font:inherit;font-size:18px;padding:5px 8px;border:2px solid #b197fc;border-radius:10px;text-align:center}#skipBox button{font:inherit;font-size:15px;border:0;border-radius:10px;padding:6px 12px;background:#7048e8;color:#fff;cursor:pointer}#skipBox i{display:block;font-style:normal;color:#c2255c;min-height:20px;margin-top:4px}
+
+/* ======================================================================
+   3.3 밤하늘 갤러리 화면 (금빛 액자 · 유리 패널 · 명조 제목)
+   - 아래 규칙이 위의 옛 규칙을 덮어써요. body.game 안에서만 써요(안내 페이지는 그대로).
+   ====================================================================== */
+:root{--gl:rgba(15,18,40,.58);--gl2:rgba(14,17,38,.82);--gl3:rgba(14,17,38,.92);--line:rgba(255,255,255,.14);--lineG:rgba(232,194,106,.5);
+  --gold:#e8c26a;--gold2:#f7dc95;--goldD:#b8862a;--cream:#f6ecd2;--cream2:#d9cfb6;--mute:#a9a6b8;
+  --serif:'Gowun Batang','Batang','AppleMyungjo',serif;--sans:'Jua','Malgun Gothic',sans-serif;
+  --gGold:linear-gradient(180deg,#ffe7a3 0%,#f4c25a 52%,#d99a2e 100%)}
+body.game{color:var(--cream)}
+body.game #title h1,body.game #title .sub,body.game #title .panel>p,body.game #objText,body.game #toast,body.game #banner,body.game #dlgKo,body.game .panel h2,body.game .panel p{word-break:keep-all;overflow-wrap:anywhere}
+body.game.noblur *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body.game.noblur #questBox,body.game.noblur #nav,body.game.noblur #hl .row,body.game.noblur .hud .btns button,body.game.noblur .hud .pill,body.game.noblur #thBox{background:var(--gl2)}
+/* 시작 화면이 떠 있는 동안 게임 화면 표시는 숨겨요 */
+body.game:has(#title.show) .hud,body.game:has(#title.show) #thBox,body.game:has(#title.show) #nav,body.game.pre .hud,body.game.pre #nav,body.game.pre #hl,body.game.pre #mini,body.game.pre #keycaps,body.game.pre #thBox,body.game.pre #mpChip,body.game.pre .edge,body.game.pre #held,body.game.pre #sentBar,body.game.pre #prompt{visibility:hidden}
+
+/* ---- 위 칸: 점수 칩 + 미션 카드 (왼쪽 위) ---- */
+body.game .hud .pill{background:rgba(15,18,40,.68);color:var(--cream);border:1px solid var(--line);border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.25);padding:6px 13px;font-size:15px}
+body.game .hud .pill span,body.game .hud .pill b{color:var(--gold2)}
+body.game #meFace{border:2px solid var(--gold);background:linear-gradient(180deg,#2b335e,#1a1f3d)}
+body.game #gemBox i{background:rgba(255,255,255,.14)}
+body.game #gemBox i b{background:linear-gradient(90deg,#66d9e8,#a5d8ff)}
+body.game #safeBox.low{background:rgba(201,42,42,.55);color:#fff;border-color:#ff8787}
+body.game #safeBox.low b{color:#fff}
+body.game .hud #questBox{border-radius:16px;padding:9px 15px 11px;background:var(--gl2);border:1px solid var(--line);border-top:1px solid var(--lineG);box-shadow:0 10px 30px rgba(0,0,0,.3)}
+body.game #stageName{font-family:var(--sans);font-size:13px;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+body.game #objText{font-family:var(--serif);font-weight:700;font-size:17px;line-height:1.45;color:var(--cream);letter-spacing:.01em}
+body.game #objText b{color:var(--gold2)}
+body.game #stageDots{gap:5px;margin:2px 0 4px}
+body.game #stageDots i{width:16px;height:4px;border-radius:2px;background:rgba(255,255,255,.18)}
+body.game #stageDots i.on{background:var(--gold)}
+body.game #stageDots i.now{background:var(--gold2);box-shadow:0 0 8px rgba(247,220,149,.8)}
+/* 둥근 아이콘 단추 (오른쪽 위) */
+body.game .hud .btns{gap:8px;align-items:center}
+body.game .hud .btns button{position:relative;width:42px;height:42px;padding:0;border-radius:50%;background:rgba(15,18,40,.68);border:1px solid var(--line);color:var(--cream);box-shadow:0 6px 18px rgba(0,0,0,.28);font-size:18px;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:border-color .15s,transform .15s;flex:0 0 auto}
+body.game .hud .btns button:hover{border-color:var(--gold);transform:translateY(-1px)}
+body.game .hud .btns button .ic{font-family:var(--serif);font-weight:700}
+body.game .hud .btns button .lb{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:13px;letter-spacing:.04em;color:var(--cream);background:var(--gl3);border:1px solid var(--line);border-radius:8px;padding:3px 8px;opacity:0;pointer-events:none;transition:opacity .15s}
+body.game .hud .btns button:hover .lb,body.game .hud .btns button:focus-visible .lb{opacity:1}
+body.game .hud .btns button.tipOn .lb{opacity:1}
+body.game .hud .btns button[hidden]{display:none}
+body.game #koToggle.on{background:rgba(232,194,106,.28);border-color:var(--gold);color:var(--gold2);box-shadow:0 0 14px rgba(232,194,106,.35)}
+body.game #koToggle.on .ic{color:var(--gold2)}
+
+/* ---- 나침반 알약 (가운데 위): 아이콘 + 가는 곳 + 거리 ---- */
+body.game #nav{flex-direction:row;gap:10px;padding:5px 16px 5px 5px;border-radius:999px;background:var(--gl);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.3);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);white-space:nowrap;max-width:min(440px,70vw);transition:opacity .25s}
+body.game #nav.off{opacity:0}
+body.game #nav .navIc{position:relative;width:32px;height:32px;border-radius:50%;background:var(--gGold);box-shadow:0 0 12px rgba(244,194,90,.55),inset 0 1px 0 rgba(255,255,255,.6);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:16px}
+body.game #nav .navIc .em{display:none;line-height:1}
+body.game #arrow{position:absolute;left:50%;top:50%;margin:-9px 0 0 -6px;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:18px solid #3a2608;filter:none;transform-origin:50% 50%}
+body.game #arrow[style*="none"]+.em{display:block}
+body.game #navName{font-family:var(--serif);font-weight:700;font-size:16px;color:var(--cream);overflow:hidden;text-overflow:ellipsis;max-width:240px}
+body.game #navName:empty{display:none}
+body.game #dist{background:none;padding:0;margin:0;font-family:var(--serif);font-size:15px;color:var(--gold2);letter-spacing:.03em}
+body.game #nav.here .navIc{animation:navHere 1s infinite}
+@keyframes navHere{50%{box-shadow:0 0 22px rgba(244,194,90,.95)}}
+
+/* ---- 가볼 곳 목록 (왼쪽) ---- */
+#hl{position:fixed;left:16px;top:max(calc(var(--hudB,130px) + 16px),30vh);width:300px;z-index:4;pointer-events:none;display:none}
+body.game #hl.show{display:block}
+#hl .hdr{display:flex;justify-content:space-between;align-items:center;font-size:13px;letter-spacing:.18em;color:var(--gold2);margin:0 4px 6px;text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.6)}
+#hl .hdr i{font-style:normal;font-size:12px;letter-spacing:.04em;color:var(--cream2);opacity:.75}
+#hl .row{display:flex;align-items:center;gap:10px;padding:6px 11px 6px 7px;margin-bottom:6px;border-radius:12px;background:rgba(15,18,40,.66);border:1px solid var(--line)}
+#hl .row.goal{border:1.5px solid var(--gold);box-shadow:0 0 0 1px rgba(232,194,106,.2),0 0 18px rgba(232,194,106,.22);background:rgba(30,27,40,.72)}
+#hl .ic{width:34px;height:34px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--c,rgba(255,255,255,.35));display:flex;align-items:center;justify-content:center;font-size:17px;overflow:hidden;background:rgba(255,255,255,.06)}
+#hl .ic img{width:150%;height:150%;object-fit:cover;object-position:50% 22%}
+#hl .goal .ic{border-color:var(--gold);background:rgba(232,194,106,.18)}
+#hl .tx{flex:1;min-width:0;line-height:1.22}
+#hl .nm{font-family:var(--serif);font-weight:700;font-size:15px;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hl .ct{font-size:13px;letter-spacing:.1em;color:var(--c,#9fb0d0);margin-top:1px}
+#hl .ds{font-family:var(--serif);font-size:14px;color:var(--cream);white-space:nowrap;display:flex;align-items:center}
+#hl .ar{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:10px solid var(--cream2);margin-left:7px;display:inline-block}
+
+/* ---- 둥근 작은 지도 (왼쪽 아래, 금빛 테) ---- */
+#mini{position:fixed;left:16px;bottom:16px;width:178px;height:178px;border-radius:50%;padding:6px;z-index:5;pointer-events:none;display:none;
+  background:conic-gradient(from 210deg,#f9e7a6,#c8962e 18%,#fbe9ab 34%,#a8741c 52%,#f3d27a 70%,#b98a2f 86%,#f9e7a6);box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4)}
+body.game #mini.show{display:block}
+#mini canvas{display:block;width:100%;height:100%;border-radius:50%;background:#1b2140;box-shadow:inset 0 0 0 2px rgba(40,26,6,.85)}
+
+/* ---- 자판 안내 (가운데 아래, 컴퓨터만) ---- */
+#keycaps{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:5px;opacity:.94;transition:opacity .4s}
+body.game #keycaps.show{display:flex}
+#keycaps.dim{opacity:.72}
+#keycaps.fade{opacity:.22}
+#keycaps .kr{display:flex;gap:5px}
+#keycaps .k{min-width:50px;height:44px;padding:0 8px;border-radius:9px;background:rgba(15,18,40,.64);border:1px solid rgba(255,255,255,.18);border-bottom:3px solid rgba(0,0,0,.45);color:var(--cream);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;transition:background .08s,transform .08s,color .08s}
+#keycaps .k b{font-family:var(--serif);font-weight:700;font-size:16px}
+#keycaps .k small{font-size:12px;color:var(--cream2);margin-top:2px;white-space:nowrap}
+#keycaps .k.wide{min-width:160px}
+#keycaps .k.gap{visibility:hidden;min-width:20px}
+#keycaps .k.on{background:var(--gGold);color:#3a2608;border-color:#ffe9a8;box-shadow:0 0 16px rgba(244,194,90,.6);transform:translateY(1px)}
+#keycaps .k.on small{color:#5c3d0c}
+body.touch #keycaps,body.touch #keycaps.show{display:none}
+
+/* ---- 말 걸기 안내 · 들고 있는 것 · 표지 코인 ---- */
+body.game #prompt{bottom:174px;background:var(--gl2);border:1px solid var(--lineG);color:var(--cream);font-family:var(--serif);font-weight:700;font-size:18px;border-radius:999px;padding:9px 20px 9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.35),0 0 18px rgba(232,194,106,.2)}
+body.game.touch #prompt{bottom:120px}
+body.game #prompt b{background:var(--gGold);color:#3a2608;border-radius:8px;padding:1px 9px;margin-right:8px;font-family:var(--serif)}
+body.game #held{left:50%;transform:translateX(-50%);bottom:222px;background:var(--gl2);color:var(--cream);border:1.5px solid var(--gold);border-radius:999px;font-family:var(--serif);padding:7px 16px}
+body.game #held b{color:var(--gold2)}
+body.game.touch #held{bottom:176px}
+body.game #thBox{right:16px;bottom:16px;border-radius:999px;background:rgba(15,18,40,.68);color:var(--cream);border:1px solid var(--line);font-size:15px;padding:7px 14px}
+body.game #thBox span{color:var(--gold2)}
+
+/* ---- 알림 카드 · 큰 알림 ---- */
+body.game #toast{top:118px;background:var(--gl2);color:var(--cream);border:1px solid var(--line);border-top:1px solid var(--lineG);border-radius:16px;padding:14px 26px;font-family:var(--serif);font-weight:700;font-size:18px;line-height:1.55;box-shadow:0 12px 34px rgba(0,0,0,.4);max-width:min(620px,90vw)}
+body.game #toast b{color:var(--gold2)}
+body.game #toast small{font-weight:400;color:var(--cream2)}
+body.game #banner{background:var(--gl3);border:1px solid var(--lineG);border-radius:18px;padding:20px 40px 18px;box-shadow:0 18px 50px rgba(0,0,0,.5),0 0 40px rgba(232,194,106,.15)}
+body.game #banner b{font-family:var(--serif);font-weight:700;font-size:30px;color:var(--gold2);letter-spacing:.04em;margin-bottom:4px}
+body.game #banner span{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--cream2)}
+body.game .slot{background:var(--gl);color:rgba(246,236,210,.45);border:1px solid var(--line);font-family:var(--serif)}
+body.game .slot.fill{background:var(--gGold);color:#3a2608;border-color:#ffe9a8}
+body.game .edge{color:var(--gold);text-shadow:0 0 10px rgba(0,0,0,.6),0 0 18px rgba(232,194,106,.6)}
+body.game .edge small{background:var(--gl2);color:var(--gold2);border:1px solid var(--lineG);font-family:var(--serif);font-weight:700}
+body.game #mapBox{top:68px;right:16px;padding:6px;border-radius:16px;background:var(--gl2);border:1.5px solid var(--gold);box-shadow:0 12px 34px rgba(0,0,0,.45)}
+body.game #mapCanvas{width:240px;height:240px;border-radius:11px}
+body.game #coach{left:16px;bottom:212px;background:var(--gl2);color:var(--cream);border:1px solid var(--lineG);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+body.game #coach>b{font-family:var(--serif);color:var(--gold2)}
+body.game #coach div:before{color:rgba(255,255,255,.4)}
+body.game #coach div.ok{color:var(--mute)}
+body.game #coach div.ok:before{color:var(--gold)}
+body.game #coachX{background:rgba(255,255,255,.1);color:var(--cream)}
+body.game kbd{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-bottom-width:3px;color:var(--cream)}
+
+/* ---- 대화 상자: 유리 카드 + 명조 영어 문장 ---- */
+body.game #dlg{background:var(--gl3);border:1px solid var(--lineG);color:var(--cream);border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.3)}
+body.game #dlgWho{display:inline-block;background:none;color:var(--gold);border:1px solid var(--lineG);border-radius:999px;font-size:14px;letter-spacing:.12em;padding:3px 14px}
+body.game #dlgEn{font-family:var(--serif);font-weight:700;color:#fbf3dc;letter-spacing:.01em}
+body.game #dlgKo{color:var(--cream2)}
+body.game #dlgKo b{color:var(--gold2)}
+body.game #dlgFace{border:3px solid var(--gold);background:linear-gradient(180deg,#2b335e,#1a1f3d);box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 16px rgba(232,194,106,.3)}
+body.game .choice{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.2);color:var(--cream);font-family:var(--serif);font-weight:700}
+body.game .choice:hover:not(:disabled){border-color:var(--gold);background:rgba(232,194,106,.12)}
+body.game .choice .num{background:var(--gGold);color:#3a2608;border-radius:50%;width:22px;height:22px;padding:0;line-height:22px;text-align:center;font-family:var(--sans)}
+body.game .choice.right{background:rgba(64,192,87,.22);border-color:#69db7c;color:#fff}
+body.game .choice.wrong{background:rgba(250,82,82,.16);border-color:#ff8787;color:#ffd5d5}
+body.game .choice.nudge{border-color:var(--gold)}
+body.game .chip{background:var(--gGold);color:#3a2608;font-family:var(--serif);font-weight:700}
+body.game .orderAns{border-bottom:2px dashed rgba(255,255,255,.25)}
+body.game .dlgRow button{border-radius:999px;font-family:var(--sans)}
+body.game #dlgNext{background:var(--gGold);color:#3a2608;box-shadow:0 0 14px rgba(244,194,90,.35)}
+body.game #dlgSpeak,body.game #dlgPeek{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid var(--line)}
+
+/* ---- 창(도움말·글쓰기·끝): 밤빛 카드 ---- */
+body.game .overlay{background:rgba(8,10,24,.62)}
+body.game .panel{background:linear-gradient(180deg,rgba(26,30,62,.97),rgba(13,16,36,.97));color:var(--cream);border:1px solid var(--lineG);box-shadow:0 24px 70px rgba(0,0,0,.6)}
+body.game .panel h1,body.game .panel h2{font-family:var(--serif);font-weight:700;color:var(--cream);letter-spacing:.03em}
+body.game .panel p{color:var(--cream2)}
+body.game .panel p b,body.game .panel li b{color:var(--gold2)}
+body.game .big{background:var(--gGold);color:#3a2608;border-radius:999px;font-family:var(--serif);font-weight:700;letter-spacing:.06em;box-shadow:0 0 22px rgba(244,194,90,.4),inset 0 1px 0 rgba(255,255,255,.55)}
+body.game .big.alt{background:linear-gradient(180deg,#9be7dc,#38b2a2);color:#082b27;box-shadow:0 0 20px rgba(56,178,162,.35)}
+body.game .big.ghost{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid var(--line);box-shadow:none}
+/* 롯데월드 끝 화면: 두 번째 단추 (학교 앞에서 둘러보기) — 금빛 테두리 알약 */
+body.game #endStay{display:block;margin:12px auto 0!important;background:transparent!important;border:1.5px solid rgba(232,194,106,.65)!important;color:var(--gold2)!important;border-radius:999px!important;padding:9px 22px!important;font-family:var(--serif)!important;font-weight:700;font-size:15px!important;letter-spacing:.04em;opacity:1!important;cursor:pointer;transition:background .15s}
+body.game #endStay:hover{background:rgba(232,194,106,.12)!important}
+body.game #writer label{color:var(--cream2)}
+body.game #writer input,body.game #writer select{background:rgba(255,255,255,.08);color:var(--cream);border:1.5px solid rgba(255,255,255,.25)}
+body.game #writer select option{color:#1d3557;background:#fff}
+body.game .cardPrev{background:#fbf3df;color:#2d2410;border:2px solid var(--gold);font-family:var(--serif)}
+body.game #endCard{background:#fbf3df;color:#2d2410;font-family:var(--serif)}
+body.game .check{color:var(--cream2)}
+body.game #skipBox{background:rgba(177,151,252,.1);border-color:rgba(177,151,252,.5);color:var(--cream2)}
+body.game #skipBox input{background:rgba(255,255,255,.08);color:var(--cream)}
+body.game #skipBox i{color:#ffa8a8}
+/* 게임성 층 · 함께 하기 · 놀이 관문 */
+body.game .funNote{background:var(--gl3);color:var(--cream);border:1px solid var(--lineG)}
+body.game .funNote.badge{background:linear-gradient(180deg,rgba(40,34,20,.95),rgba(20,18,30,.95));border-color:var(--gold)}
+body.game .funNote.badge small{color:var(--gold)}
+body.game .funNote.badge span{color:var(--cream2)}
+body.game #funCard{background:var(--gl3);color:var(--cream);border:1.5px solid var(--gold);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+body.game #funCard .fcB b.t{font-family:var(--serif);font-weight:700;color:var(--gold2)}
+body.game #funCard .fcB span b{color:#8ce99a}
+body.game #mpChip{background:var(--gl);color:var(--cream);border:1px solid var(--line);border-radius:14px}
+body.game #mpChip i{background:rgba(255,255,255,.15)}
+body.game #mpChip em{color:#a5d8ff}
+body.game #mpNote{background:var(--gl3);color:var(--cream);border:1.5px solid var(--gold);font-family:var(--serif);font-weight:700}
+body.game #mpPanel{background:var(--gl3);color:var(--cream);border:1px solid var(--lineG)}
+body.game #mpPanel .mpT{background:none;border:1px solid var(--lineG);color:var(--gold);letter-spacing:.1em}
+body.game #mpPanel .mpEn{font-family:var(--serif);font-weight:700}
+body.game #mpPanel .mpKo,body.game #mpPanel .mpSub,body.game #mpPanel .mpRow span,body.game #mpPanel .mpChoice small{color:var(--cream2)}
+body.game #mpPanel .mpChoice,body.game #mpPanel .mpRow,body.game #mpPanel .mpEmo button,body.game #mpPanel .mpGroups button,body.game #mpPanel .mpX{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2);color:var(--cream)}
+body.game #mpPanel .mpChoice:hover{border-color:var(--gold);background:rgba(232,194,106,.12)}
+body.game #mpPanel .mpChoice .num{background:var(--gGold);color:#3a2608}
+body.game #playGate{background:var(--gl3);border:1px solid var(--lineG);color:var(--cream);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+body.game #playGate .pgTitle{background:none;border:1px solid var(--lineG);color:var(--gold);box-shadow:none;letter-spacing:.08em}
+body.game #playGate .pgCost{background:rgba(232,194,106,.14);border-color:var(--lineG);color:var(--gold2)}
+body.game #playGate .pgTag,body.game #playGate .pgKo,body.game #playGate .pgPic small{color:var(--cream2)}
+body.game #playGate .pgKo b{color:var(--gold2)}
+body.game #playGate .pgEn{font-family:var(--serif);font-weight:700;color:#fbf3dc}
+body.game #playGate .pgPic{background:rgba(255,255,255,.06)}
+body.game #playGate .pgX,body.game #playGate .pgSpk{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid var(--line)}
+body.game #playGate .pgCh .choice{box-shadow:none}
+body.game #playGate .pgHint{color:var(--gold2)}
+/* 터치 단추 */
+body.game #actBtn{background:var(--gl2);border:2px solid var(--lineG);color:var(--cream);font-family:var(--serif);font-weight:700;box-shadow:0 8px 22px rgba(0,0,0,.35)}
+body.game #actBtn.ready{background:var(--gGold);color:#3a2608;border-color:#ffe9a8;box-shadow:0 0 22px rgba(244,194,90,.6)}
+body.game #jumpBtn{background:var(--gl);border:1.5px solid var(--line);color:var(--cream)}
+body.game #mpEmoBtn{background:var(--gl2);border:1.5px solid var(--lineG)}
+
+/* ---- 넓은 화면: 왼쪽 위 기둥(점수·미션) + 가운데 나침반 + 오른쪽 위 단추 ---- */
+@media (min-width:901px){
+  body.game .hud{left:16px;right:auto;top:14px;width:min(420px,36vw);flex-wrap:wrap;gap:7px}
+  body.game .hud #questBox{order:10;flex:1 1 100%}
+  body.game .hud .btns{position:fixed;top:14px;right:16px;flex-wrap:nowrap}
+  body.game #mpChip{left:auto;right:16px;top:auto;bottom:62px}
+}
+@media (min-width:1160px){ body.game #nav{top:14px} }
+@media (min-width:901px) and (max-width:1159px){ body.game #nav{top:calc(var(--hudB,130px) + 10px)} body.game #toast{top:calc(var(--hudB,130px) + 64px)} #hl{top:max(calc(var(--hudB,130px) + 64px),30vh)} }
+@media (max-height:640px){ #hl,body.game #hl.show{display:none} #mini{width:132px;height:132px} body.game #coach{bottom:160px} }
+@media (max-height:520px){ #keycaps,body.game #keycaps.show{display:none} body.game #prompt{bottom:24px} }
+/* ---- 좁은 화면(태블릿 세로·휴대폰) ---- */
+@media (max-width:900px){
+  #hl,body.game #hl.show{display:none}
+  #keycaps,body.game #keycaps.show{display:none}
+  body.game #prompt{bottom:120px}
+  body.game #held{bottom:14px;left:auto;right:16px;transform:none}
+}
+@media (max-width:640px){
+  body.game #objText{font-size:15px}
+  body.game .hud .btns button{width:38px;height:38px;font-size:16px}
+  body.game #toast{font-size:16px;padding:11px 18px}
+  body.game #navName{max-width:150px;font-size:15px}
+  #mini{width:120px;height:120px;padding:5px}
+  body.game #coach{bottom:150px}
+}
+@media (max-width:480px){
+  body.game .hud .btns button{width:36px;height:36px;font-size:15px;padding:0}
+  body.game .hud .pill{padding:5px 10px;font-size:14px}
+  #mini{width:96px;height:96px;padding:4px;left:10px;bottom:12px}
+  body.game #coach{bottom:120px}
+  body.game #nav{max-width:64vw;padding:4px 12px 4px 4px;gap:8px}
+  body.game #nav .navIc{width:28px;height:28px}
+  body.game #navName{max-width:110px;font-size:14px}
+  body.game #dist{font-size:14px}
+  body.game #prompt{font-size:16px}
+}
+
+/* ---- 시작 화면: 금빛 액자 속 살아 있는 3D 장면 + 명조 제목 + 금빛 알약 단추 ---- */
+body.game #title.overlay{background:radial-gradient(ellipse 80% 70% at 50% 35%,#1e2550 0%,#0d1028 65%,#080a1a 100%);align-items:flex-start;overflow-y:auto;overflow-x:hidden;padding:0}
+body.game #title.overlay.framed{background:transparent}
+body.game #title.overlay::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse 75% 70% at 50% 38%,rgba(0,0,0,0) 55%,rgba(0,0,0,.38) 100%)}
+body.game #title.overlay::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(1.5px 1.5px at 6.0% 53.6%,#dfe7ff,transparent),radial-gradient(2.5px 2.5px at 89.1% 57.0%,#fff6d8,transparent),radial-gradient(2.5px 2.5px at 17.4% 46.6%,#fff6d8,transparent),radial-gradient(2.5px 2.5px at 84.3% 69.7%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 10.1% 62.4%,#fff6d8,transparent),radial-gradient(2.5px 2.5px at 91.8% 83.7%,#f7dc95,transparent),radial-gradient(1.2px 1.2px at 14.6% 65.4%,#fff6d8,transparent),radial-gradient(1.5px 1.5px at 93.9% 58.0%,#fff6d8,transparent),radial-gradient(2.5px 2.5px at 16.0% 28.1%,#dfe7ff,transparent),radial-gradient(2px 2px at 96.6% 39.0%,#f7dc95,transparent),radial-gradient(1.5px 1.5px at 14.4% 56.7%,#f7dc95,transparent),radial-gradient(1.5px 1.5px at 82.7% 15.6%,#f7dc95,transparent),radial-gradient(1.5px 1.5px at 18.4% 43.6%,#f7dc95,transparent),radial-gradient(1.5px 1.5px at 89.6% 38.9%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 11.9% 57.3%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 96.6% 5.7%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 13.4% 18.2%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 96.4% 55.9%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 16.1% 56.3%,#fff6d8,transparent),radial-gradient(2px 2px at 82.1% 82.4%,#fff6d8,transparent),radial-gradient(1.5px 1.5px at 7.8% 9.2%,#fff6d8,transparent),radial-gradient(1.2px 1.2px at 86.0% 74.5%,#fff6d8,transparent),radial-gradient(2px 2px at 12.3% 73.8%,#dfe7ff,transparent),radial-gradient(1.5px 1.5px at 91.0% 54.2%,#dfe7ff,transparent),radial-gradient(1.2px 1.2px at 6.0% 6.3%,#fff6d8,transparent),radial-gradient(1.5px 1.5px at 82.8% 52.8%,#f7dc95,transparent);animation:twinkle 3.6s ease-in-out infinite alternate}
+@keyframes twinkle{0%{opacity:.35}100%{opacity:1}}
+@media (max-width:900px){body.game #title.overlay::before{display:none}}
+@media (prefers-reduced-motion:reduce){body.game #title.overlay::before{animation:none}}
+body.game #title .panel{position:relative;z-index:2;background:transparent;border:0;box-shadow:none;width:min(880px,100%);max-height:none;overflow:visible;margin:0 auto;padding:26px 16px 46px;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:center;text-align:center;color:var(--cream)}
+#title .panel>*{order:20;flex:0 0 100%;position:relative;z-index:1}
+body.game #title .tFrame{order:0;flex:0 0 auto;position:relative;width:min(700px,88vw,calc(44vh * 16 / 9));aspect-ratio:16/9;border:16px solid #c8962e;flex:0 0 auto;z-index:0;background:transparent;
+  border-image:linear-gradient(125deg,#fbe9ab 0%,#c8962e 22%,#fff1c1 40%,#a8741c 62%,#f3d27a 80%,#b98a2f 100%) 1;
+  box-shadow:inset 0 0 0 2px rgba(42,28,6,.9),inset 0 0 30px rgba(0,0,0,.35),0 24px 60px rgba(0,0,0,.65),0 0 0 220vmax rgba(10,12,30,.93)}
+#title .tFrame::before{content:'';position:absolute;inset:-16px;border:1px solid rgba(255,240,190,.55);pointer-events:none}
+#title .tFrame .plate{position:absolute;left:50%;bottom:-13px;transform:translate(-50%,50%);background:linear-gradient(180deg,#2a2210,#15110a);border:1px solid #c8962e;color:var(--gold2);font-family:var(--serif);font-size:12px;letter-spacing:.2em;padding:3px 14px;white-space:nowrap;border-radius:2px}
+body.game #title h1{order:1;margin:30px 0 2px;font-family:var(--serif);font-weight:700;font-size:clamp(25px,3.2vw,38px);letter-spacing:.07em;line-height:1.3;color:#f3e6c4;background:none;-webkit-text-fill-color:currentColor;filter:none;text-shadow:0 2px 18px rgba(232,194,106,.25)}
+body.game #title .sub{order:2;font-family:var(--serif);font-style:italic;font-size:15px;color:#b9b2a0;letter-spacing:.02em}
+body.game #title .sub .ver{background:none;border:1px solid rgba(232,194,106,.6);color:var(--gold);font-style:normal;font-family:var(--sans);font-size:12px;letter-spacing:.06em}
+body.game #title .avatarPick{order:3;margin:16px auto 4px;max-width:none}
+body.game #title #decoPick{order:4;margin:2px auto 6px;max-width:none}
+body.game #title .panel>.big{flex:0 0 auto;order:6;margin:12px 6px 2px;padding:12px 34px;font-size:19px}
+body.game #title .panel>#btnContinue{order:5;background:var(--gGold);color:#3a2608;box-shadow:0 0 26px rgba(244,194,90,.5),inset 0 1px 0 rgba(255,255,255,.55)}
+body.game #title .panel::before{content:'';order:6;flex:0 0 100%;height:0}
+body.game #title .panel>#btnStart.restart{order:6;margin:20px 6px 0;padding:9px 16px;min-height:40px;background:transparent;border:1.5px solid transparent;box-shadow:none;color:#b9b2a0;font-size:14.5px;font-weight:400;letter-spacing:.03em;border-radius:999px;transition:color .15s,background .15s,border-color .15s}
+body.game #title .panel>#btnStart.restart:hover{color:var(--cream);background:rgba(255,255,255,.05)}
+body.game #title .panel>#btnStart.restart.arm{color:#ffd8d8;border-color:#ff8787;background:rgba(201,42,42,.16);font-weight:700;animation:armPulse 1s ease-in-out infinite}
+@keyframes armPulse{50%{box-shadow:0 0 0 4px rgba(255,135,135,.18)}}
+body.game #title .links{order:8;margin-top:14px;font-size:13px;letter-spacing:.16em}
+/* 우리 반으로 참여하기 (net.js): 밤빛 카드에 맞춰요 */
+body.game #title .net-box{order:7;color:var(--cream);margin:16px 0 2px;max-width:none;flex:0 0 100%}
+body.game #title .net-box>*{max-width:520px;margin-left:auto;margin-right:auto}
+body.game #title .net-open{background:rgba(42,157,143,.12);border:1.5px dashed rgba(99,211,196,.6);color:#c3f0e8;font-family:var(--serif);font-weight:700;font-size:15px;border-radius:999px;padding:9px 14px}
+body.game #title .net-open:hover{background:rgba(42,157,143,.22)}
+body.game #title .net-form{background:rgba(255,255,255,.05);border:1px solid rgba(99,211,196,.5);color:var(--cream)}
+body.game #title .net-box input{background:rgba(255,255,255,.08);color:var(--cream);border-color:rgba(255,255,255,.25)}
+body.game #title .net-btns button.net-ghost{background:rgba(255,255,255,.1);color:var(--cream)}
+body.game #title .net-hint{color:var(--cream2)}
+body.game #title .net-msg{color:#ffa8a8}
+body.game #title .net-msg.net-good{color:#63d3c4}
+body.game #title .net-joined{background:rgba(42,157,143,.14);color:var(--cream)}
+body.game #title .net-joined b{color:#63d3c4}
+body.game #title .links a{color:#c9bfa6;text-decoration:none;margin:0 10px}
+body.game #title .links a:hover{color:var(--gold2)}
+body.game #title .panel>p{order:9;font-family:var(--serif);font-size:15px;line-height:1.7;color:#a9a391;max-width:620px;margin:16px auto 0}
+body.game #title .panel>p b{color:#d9cfb6}
+body.game #title .route{order:10;margin:12px 0 2px}
+body.game #title .route span{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--cream2);font-size:14px}
+body.game #title .rule{order:11;background:rgba(201,42,42,.12);border:1px solid rgba(255,135,135,.45);color:#ffd8d8;max-width:640px;font-size:14.5px}
+body.game #title .rule b{color:#ffc9c9}
+body.game #title .keys{order:12;width:100%;max-width:760px;margin:14px auto 6px}
+body.game #title .keys div{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--cream2);font-size:14px}
+body.game #title .myRank{order:13;color:#a9a391}
+body.game #title .myRank b{color:var(--gold2)}
+body.game #title .lessonPick{order:14;margin-top:12px}
+body.game #title .lessonPick span{color:#8f8a7a;letter-spacing:.14em}
+body.game #title .lessonPick a{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--cream2);font-size:13px}
+body.game #title .lessonPick a:hover{background:rgba(232,194,106,.2);color:var(--gold2)}
+body.game #title .lessonPick a.cur{background:var(--gGold);color:#3a2608;border-color:#ffe9a8}
+body.game #title .lessonPick a.done{background:rgba(64,192,87,.16);color:#b2f2bb}
+body.game .avatarPick .apT,body.game #decoPick .dpT,body.game #decoPick .dpHow{color:#b9b2a0;font-family:var(--serif)}
+body.game .avatarPick button{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.14);box-shadow:none;width:72px}
+body.game .avatarPick button img{width:58px;height:58px;background:linear-gradient(180deg,#2b335e,#1a1f3d)}
+body.game .avatarPick button span{color:var(--cream2)}
+body.game .avatarPick button.on{border-color:var(--gold);background:rgba(232,194,106,.16);box-shadow:0 0 16px rgba(232,194,106,.35)}
+body.game #decoPick button{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.14);box-shadow:none}
+body.game #decoPick button small{color:var(--cream2)}
+body.game #decoPick button.on{border-color:var(--gold);background:rgba(232,194,106,.16)}
+body.game #decoPick button.lock{background:rgba(255,255,255,.03)}
+body.game #title .funMedals{order:13;color:#a9a391}
+body.game #title .funMedals i{background:rgba(255,255,255,.08)}
+@media (max-width:640px){
+  body.game #title .tFrame{border-width:11px;width:min(92vw,calc(40vh * 16 / 9))}
+  body.game #title .tFrame::before{inset:-11px}
+  body.game #title h1{margin-top:24px}
+  body.game #title .panel>.big{padding:11px 26px;font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){body.game #nav.here .navIc,body.game #title .panel>#btnStart.restart.arm{animation:none}}
+/* 함께 하기 칩: 미션 카드 바로 아래에 두고, 칩이 보이면 '가볼 곳' 목록을 그만큼 내려요 (태블릿·컴퓨터) */
+@media (min-width:641px){
+  body.game #mpChip{top:calc(var(--hudB,130px) + 8px)}
+  body.game:has(#mpChip.show) #hl{top:max(calc(var(--hudB,130px) + 78px),30vh)}
+}

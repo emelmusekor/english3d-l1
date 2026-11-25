@@ -433,7 +433,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.2'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.3'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -866,15 +866,22 @@ function solid(w, h, d, c, x, y, z) { const m = box(w, h, d, c, x, y, z); collid
 const block = (x1, z1, x2, z2) => colliders.push({ x1: Math.min(x1, x2), x2: Math.max(x1, x2), z1: Math.min(z1, z2), z2: Math.max(z1, z2) });
 
 function labelCanvas(text, o = {}) {
-  const fs = o.fs || 56, pad = o.pad || 22;
+  const fs = o.fs || 56, pad = o.pad || 22, tail = o.tail || 0, fnt = `${o.fw ? o.fw + ' ' : ''}${fs}px ${o.font || FONT}`;
   const c = document.createElement('canvas'); const ctx = c.getContext('2d');
-  ctx.font = `${fs}px ${FONT}`;
+  ctx.font = fnt;
   const lines = String(text).split('\n');
   const w = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width))) + pad * 2;
   const h = Math.ceil(fs * 1.25 * lines.length + pad * 1.2);
-  c.width = Math.max(o.minW || 0, w); c.height = h;
-  ctx.font = `${fs}px ${FONT}`;
-  if (o.bg !== null) {
+  c.width = Math.max(o.minW || 0, w); c.height = h + tail;
+  ctx.font = fnt;
+  if (o.bg !== null && tail) { // 말풍선: 둥근 상자 + 아래 가운데 꼬리 (테두리 안쪽으로 그려요)
+    const i = o.border ? 3 : 0, W = c.width - i, H = h - i, r = Math.min(30, (H - i) / 2), m = c.width / 2;
+    ctx.beginPath(); ctx.moveTo(i + r, i); ctx.arcTo(W, i, W, H, r); ctx.arcTo(W, H, m, H, r);
+    ctx.lineTo(m + tail * 0.75, H); ctx.lineTo(m, h + tail - i - 1); ctx.lineTo(m - tail * 0.75, H);
+    ctx.arcTo(i, H, i, i, r); ctx.arcTo(i, i, W, i, r); ctx.closePath();
+    ctx.fillStyle = o.bg || 'rgba(255,255,255,.93)'; ctx.fill();
+    if (o.border) { ctx.lineWidth = 4; ctx.strokeStyle = o.border; ctx.stroke(); }
+  } else if (o.bg !== null) {
     ctx.fillStyle = o.bg || 'rgba(255,255,255,.93)';
     const r = Math.min(26, h / 2); ctx.beginPath();
     ctx.moveTo(r, 0); ctx.arcTo(c.width, 0, c.width, h, r); ctx.arcTo(c.width, h, 0, h, r); ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, c.width, 0, r); ctx.fill();
@@ -883,7 +890,19 @@ function labelCanvas(text, o = {}) {
   ctx.fillStyle = o.fg || '#222'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   lines.forEach((l, i) => ctx.fillText(l, c.width / 2, pad * 0.6 + fs * 1.25 * (i + 0.5)));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return { t, w: c.width, h: c.height };
+  return { t, w: c.width, h: c.height, tail, fnt };
+}
+// 이름표 말풍선 (3.3): 크림색 둥근 풍선 + 금빛 테 + 기울인 명조 글씨. 글꼴이 늦게 오면 받은 뒤 다시 그려요
+const BUBBLE = { fs: 44, pad: 18, tail: 14, bg: 'rgba(251,243,223,.96)', fg: '#3a2c14', border: '#c9a24a', fw: 'italic 700', font: "'Gowun Batang', 'Batang', serif" };
+function bubbleSprite(text, height, o) {
+  const opt = Object.assign({}, BUBBLE, o || {}), s = textSprite(text, height, opt);
+  try {
+    const f = `${opt.fw} ${opt.fs}px 'Gowun Batang'`;
+    if (document.fonts && !document.fonts.check(f, String(text))) document.fonts.load(f, String(text)).then(() => {
+      try { const n = labelCanvas(text, opt), old = s.material.map; s.material.map = n.t; s.material.needsUpdate = true; s.scale.set(s.scale.y * n.w / n.h, s.scale.y, 1); if (old) old.dispose(); } catch (e) {}
+    }, () => {});
+  } catch (e) {}
+  return s;
 }
 function textSprite(text, height = 0.42, o) {
   const { t, w, h } = labelCanvas(text, o);
@@ -1117,7 +1136,7 @@ function makePerson(o0) {
   bakeParts(headG); for (const pv of legs) bakeParts(pv); for (const pv of arms) bakeParts(pv); bakeParts(g);
   g.userData.anim = anim; g.userData.opts = o0; g.userData.adult = adult;
   const s = o.scale || (adult ? 1.1 : 1); g.scale.setScalar(s);
-  const tag = textSprite(o.name, 0.34 / s, { fs: 48, fg: '#1d3557' }); tag.position.y = 2.25 + (o.hat ? 0.4 : 0); g.add(tag);
+  const tag = bubbleSprite(o.name, 0.38 / s); tag.position.y = 2.3 + (o.hat ? 0.4 : 0); g.add(tag);
   const mark = textSprite('!', 0.5 / s, { fs: 70, bg: '#ffd43b', fg: '#c92a2a', border: '#c92a2a', pad: 18 });
   mark.position.y = 2.75 + (o.hat ? 0.4 : 0); mark.visible = false; mark.userData.baseY = mark.position.y; g.add(mark);
   g.userData.mark = mark; g.userData.tag = tag;
@@ -1468,7 +1487,7 @@ function camOccDist(ox, oy, oz, dx, dy, dz, far) {
   }
   return Infinity;
 }
-const camPerson = (ppl, x, z) => { for (const n of ppl) { if (n.follow || !n.g.visible) continue; const q = n.g.position; if (Math.abs(q.x - x) < 0.5 && Math.abs(q.z - z) < 0.5) return true; } return false; };
+const camPerson = (ppl, x, z) => { for (const n of ppl) { if (n.follow || n.inLine || !n.g.visible) continue; /* 내 뒤에 줄 서서 따라오는 친구(inLine)는 카메라를 당기지 않아요 */ const q = n.g.position; if (Math.abs(q.x - x) < 0.5 && Math.abs(q.z - z) < 0.5) return true; } return false; };
 function camTick(dt, t) {
   dt = Math.max(0, Math.min(0.1, dt || 0));
   if (window.PLAY && window.PLAY.cam(dt, t)) return; // 놀이 층: 비행기를 타는 동안은 카메라가 비행기를 따라가요
@@ -2262,7 +2281,7 @@ $('#mapBtn').onclick = () => { $('#mapBox').classList.toggle('show'); };
 // ---------------- 지도 ----------------
 const mapC = $('#mapCanvas'), mctx = mapC.getContext('2d');
 function drawMap() {
-  if (!$('#mapBox').classList.contains('show')) return;
+  if (!$('#mapBox').classList.contains('show') && !MINI.on) return;
   const s = mapC.width / 96, cx = mapC.width / 2;
   const tx = (x) => cx + x * s, tz = (z) => cx + z * s;
   mctx.fillStyle = '#8bc66a'; mctx.fillRect(0, 0, mapC.width, mapC.height);
@@ -2487,15 +2506,16 @@ function update(dt, t) {
     const dx = P.x - p.x, dz = P.z - p.z, d = Math.hypot(dx, dz);
     if (d < 6 && !n.follow) { const target = Math.atan2(dx, dz); let diff = target - g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); g.rotation.y += diff * Math.min(1, dt * 5); }
     if (!n.follow) p.y = 0;
-    { const tg = g.userData.tag; if (tg && !n.hideTag) tg.visible = g.position.distanceTo(camera.position) > 2.4; } // 카메라 바로 앞 사람의 이름표는 화면을 크게 가려서 숨겨요
+    { const tg = g.userData.tag; if (tg && !n.hideTag) tg.visible = g.position.distanceTo(camera.position) > 3.6; } // 카메라 바로 앞 사람의 이름표는 화면을 크게 가려서 숨겨요
     const m = g.userData.mark; if (m.visible) m.position.y = (m.userData.baseY || 2.75) + Math.sin(t * 4) * 0.1;
     const sc = d - (m.visible ? 3 : n.talk ? 1.2 : 0); // ❗ 붙은 미션 친구가 가장 먼저, 그다음 할 말이 있는 친구
     if (g.visible && d < 3.0 && sc < nd) { nd = sc; nearNPC = n; }
   }
   if (nearNPC && started && !dlgOpen) {
-    ui.prompt.style.display = 'block';
-    ui.prompt.innerHTML = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? '에게 말 걸기 ❗' : '에게 말 걸기');
-  } else ui.prompt.style.display = 'none';
+    if (ui.prompt.style.display !== 'block') ui.prompt.style.display = 'block';
+    const ph = (isTouch ? '👆 ' : '<b>E</b> ') + nearNPC.name + (nearNPC.talk ? '에게 말 걸기 ❗' : '에게 말 걸기');
+    if (ui.prompt._h !== ph) { ui.prompt._h = ph; ui.prompt.innerHTML = ph; }
+  } else if (ui.prompt.style.display !== 'none') { ui.prompt.style.display = 'none'; ui.prompt._h = ''; }
   $('#actBtn').classList.toggle('ready', !!nearNPC);
 
   // 물건
@@ -2529,8 +2549,8 @@ function update(dt, t) {
     if (d > aR) {
       const nav = navTick(dt, p), aim = nav.pts[1], ty = Math.atan2(-(aim[0] - P.x), -(aim[1] - P.z)); let rel = ty - P.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
       const back = Math.abs(rel) > 1.9;
-      ui.arrow.style.display = back ? 'none' : 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; ui.dist.textContent = (back ? '↩ 뒤쪽 ' : '') + '🔍 ' + Math.round(Math.max(1, Math.max(d, nav.len) - aR)) + 'm';
-    } else { NAV.line = null; ui.arrow.style.display = 'none'; ui.dist.textContent = objective.t > 30 ? '🔍 고리가 줄어들어요' : '🔍 이 근처!'; }
+      ui.arrow.style.display = back ? 'none' : 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; setDist((back ? '↩ 뒤쪽 ' : '') + '🔍 ' + Math.round(Math.max(1, Math.max(d, nav.len) - aR)) + 'm');
+    } else { NAV.line = null; ui.arrow.style.display = 'none'; setDist(objective.t > 30 ? '🔍 고리가 줄어들어요' : '🔍 이 근처!'); }
   } else if (p && started) {
     beaconFit(p, dt);
     beacon.visible = BK.show; beacon.position.set(p[0], BK.y + Math.sin(t * 3) * 0.15, p[1]); beacon.rotation.y = t * 2;
@@ -2538,11 +2558,12 @@ function update(dt, t) {
     const aim = nav.pts[1], dx = aim[0] - P.x, dz = aim[1] - P.z; // 다음 꺾이는 곳을 가리켜요
     const ty = Math.atan2(-dx, -dz); let rel = ty - P.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
     const back = Math.abs(rel) > 1.9; // 뒤쪽이면 위 화살표 대신 글로 알려요
-    ui.arrow.style.display = back ? 'none' : 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; ui.dist.textContent = d < 3 ? '도착!' : (back ? '↩ 뒤쪽 ' : '') + Math.round(Math.max(d, nav.len)) + 'm';
+    ui.arrow.style.display = back ? 'none' : 'block'; ui.arrow.style.transform = `rotate(${-rel}rad)`; setDist(d < 3 ? '도착!' : (back ? '↩ 뒤쪽 ' : '') + Math.round(Math.max(d, nav.len)) + 'm');
     guideTick(t, p, d, rel, nav);
-  } else { NAV.line = null; guideTick(t, null, 0, 0, null); beacon.visible = false; ui.arrow.style.display = 'none'; ui.dist.textContent = ''; }
+  } else { NAV.line = null; guideTick(t, null, 0, 0, null); beacon.visible = false; ui.arrow.style.display = 'none'; setDist(''); }
   if (window.MULTI) window.MULTI.tick(dt, t); // 함께 하기: 친구 아바타
-  if ((mapTick += dt) > 0.1) { mapTick = 0; drawMap(); }
+  { const ms = performance.now(); if (ms - mapTick > (GFX.lite ? 200 : 100)) { mapTick = ms; drawMap(); miniDraw(); } } // 지도: 실제 시간으로 1초에 10번 (가볍게 그릴 때는 5번). 장면이 느려도 늦지 않게
+  skinTick(dt);
 }
 function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
@@ -2554,7 +2575,12 @@ function loop(now) {
 
 // ---------------- 시작 ----------------
 function begin(reset) {
-  if (reset) { const keep = { koHelp: S.koHelp, rate: S.rate, medals: Array.isArray(S.medals) ? S.medals : [] }; S = Object.assign(fresh(), keep); save(); }
+  if (reset) { // 처음부터: 진행(단계·점수·맞힌 수)만 지우고, 모은 것(별·최고 연속·메달·보석·카드·코인·반)은 그대로 둬요
+    const fin = S.stage >= STAGES.length - 1;
+    const keep = { koHelp: S.koHelp, rate: S.rate, medals: Array.isArray(S.medals) ? S.medals : [], stars: S.stars | 0, best: S.best | 0, gems: S.gems | 0, card: S.card || null, th: Array.isArray(S.th) ? S.th : [], done: (S.done | 0) + (fin ? 1 : 0) };
+    if (S.cls != null) keep.cls = S.cls;
+    S = Object.assign(fresh(), keep); save();
+  }
   $('#title').classList.remove('show'); started = true;
   P.x = 0; P.z = 40; P.yaw = 0; P.pitch = 0;
   startStage(S.stage);
@@ -2680,9 +2706,247 @@ try {
     inp.addEventListener('keyup', (e) => e.stopPropagation());
   }
 } catch (e) {}
+// ---------- 3.3 화면 꾸밈: 나침반 알약 · 가볼 곳 목록 · 둥근 작은 지도 · 자판 안내 · 둥근 단추 · 시작 화면 액자 ----------
+// 새 계산은 하지 않고, 이미 있는 목표(objective)·길 찾기(NAV)·지도(drawMap)·사람(NPC)을 그대로 보여 줘요.
+// 글은 바뀔 때만 쓰고, 목록은 1초에 4번, 작은 지도는 1초에 10번만 다시 그려요.
+let distTxt = null;
+function setDist(s) { s = String(s).replace(/(\d)m$/, '$1 m'); if (s !== distTxt) { distTxt = s; ui.dist.textContent = s; } }
+const MINI = { on: false, el: null, cv: null, ctx: null, W: 0, vig: null };
+const SKIN = { t: 9, slow: 9, yaw: 0, key: '', rows: [], name: '', icon: '', objT: null, nameT: '', capT: 0, pre: true };
+window.__skin = { MINI, SKIN }; // 개발용: 화면 꾸밈 상태 보기
+const skinEl = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const EMO_RE = /^\s*((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:️|‍\p{Extended_Pictographic}|\p{Emoji_Modifier})*️?)/u;
+const plainText = (h) => String(h || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+try { // 나침반 알약: [금빛 동그라미 안 바늘] [가는 곳] [거리]
+  const nav = $('#nav'), ic = skinEl('div', 'navIc'), em = skinEl('span', 'em'), nm = skinEl('span'); nm.id = 'navName';
+  nav.insertBefore(ic, nav.firstChild); ic.appendChild(ui.arrow); ic.appendChild(em); nav.insertBefore(nm, ui.dist); nav.classList.add('off');
+  SKIN.nav = nav; SKIN.navEm = em; SKIN.navNm = nm;
+} catch (e) {}
+// 가볼 곳 목록
+const HL = (() => { try { const d = skinEl('div', '', '<div class="hdr"><span>가볼 곳</span><i></i></div><div class="list"></div>'); d.id = 'hl'; document.body.appendChild(d); return { el: d, list: d.querySelector('.list'), cnt: d.querySelector('.hdr i') }; } catch (e) { return null; } })();
+// 둥근 작은 지도
+try { const d = skinEl('div', '', '<canvas></canvas>'); d.id = 'mini'; document.body.appendChild(d); MINI.el = d; MINI.cv = d.firstChild; MINI.ctx = MINI.cv.getContext('2d'); } catch (e) {}
+// 자판 안내 (컴퓨터만): 누른 글쇠가 금빛으로 켜져요
+const CAPS = (() => {
+  try {
+    const lw = lessonNo === 13 || !!window.__lw;
+    const k = (id, txt, small, cls = '') => `<div class="k ${cls}" data-k="${id}"><b>${txt}</b><small>${small}</small></div>`;
+    const d = skinEl('div', '', `<div class="kr">${k('', '', '', 'gap')}${k('W', 'W', '앞으로')}${k('E', 'E', '말 걸기')}${k('V', 'V', '보기 바꾸기')}</div>`
+      + `<div class="kr">${k('A', 'A', '왼쪽')}${k('S', 'S', '뒤로')}${k('D', 'D', '오른쪽')}${k('Shift', 'Shift', lw ? '뛰면 감점' : '달리기')}</div>`
+      + `<div class="kr">${k('Space', 'Space', '점프', 'wide')}</div>`);
+    d.id = 'keycaps'; document.body.appendChild(d);
+    const map = { KeyW: 'W', ArrowUp: 'W', KeyA: 'A', ArrowLeft: 'A', KeyS: 'S', ArrowDown: 'S', KeyD: 'D', ArrowRight: 'D', KeyE: 'E', KeyV: 'V', Space: 'Space', ShiftLeft: 'Shift', ShiftRight: 'Shift' };
+    const els = {}; d.querySelectorAll('.k[data-k]').forEach(e => { if (e.dataset.k) els[e.dataset.k] = e; });
+    const set = (e, on) => { const id = map[e.code]; if (!id || !els[id]) return; if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return; els[id].classList.toggle('on', on); if (on) { SKIN.capT = 0; d.classList.remove('dim'); } };
+    addEventListener('keydown', (e) => set(e, true)); addEventListener('keyup', (e) => set(e, false));
+    addEventListener('blur', () => { for (const id in els) els[id].classList.remove('on'); });
+    return d;
+  } catch (e) { return null; }
+})();
+// 오른쪽 위 단추: 그림 글자만 동그라미 안에, 이름은 마우스를 올리면(누르면 잠깐) 보여요
+const iconize = (b) => {
+  if (!b || b.tagName !== 'BUTTON' || b.querySelector(':scope > .ic')) return;
+  const txt = (b.textContent || '').trim(), m = EMO_RE.exec(txt);
+  const ic = m ? m[1] : (b.id === 'koToggle' ? '가' : txt.slice(0, 1));
+  let lb = (m ? txt.slice(m[0].length) : txt).trim();
+  if (b.id === 'rateBtn' && lb) lb = '읽는 속도: ' + lb;
+  if (!lb) lb = b.id === 'helpBtn' ? '도움말' : (b.title || '').replace(/\s*\(.*\)$/, '');
+  b.textContent = ''; const a = skinEl('span', 'ic'), c = skinEl('span', 'lb'); a.textContent = ic; c.textContent = lb; b.appendChild(a); b.appendChild(c);
+  b.setAttribute('aria-label', lb);
+};
+try {
+  const bs = document.querySelector('.hud .btns');
+  const all = () => bs.querySelectorAll(':scope > button').forEach(iconize); all();
+  new MutationObserver(all).observe(bs, { childList: true, subtree: true, characterData: true });
+  bs.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (!b || !isTouch) return; b.classList.add('tipOn'); clearTimeout(b._tip); b._tip = setTimeout(() => b.classList.remove('tipOn'), 1400); });
+} catch (e) {}
+// 시작 화면: 금빛 액자(속은 비어 있어서 뒤의 3D 장면이 그대로 보여요) + 이름판
+try {
+  const tp = $('#title .panel');
+  if (tp) {
+    const fr = skinEl('div', 'tFrame', '<span class="plate"></span>');
+    fr.firstChild.textContent = lessonNo === 13 || window.__lw ? 'FIELD TRIP · SAFETY' : 'LESSON ' + lessonNo;
+    tp.insertBefore(fr, tp.firstChild); tp.parentElement.classList.add('framed');
+  }
+  const tt = $('#title'), upd = () => { SKIN.pre = !!(tt && tt.classList.contains('show')); document.body.classList.toggle('pre', SKIN.pre); };
+  if (tt) new MutationObserver(upd).observe(tt, { attributes: true, attributeFilter: ['class'] }); upd();
+} catch (e) {}
+// 목표 글에서 그림 글자와 가는 곳 이름을 뽑아요 ("🏫 <b>선생님</b>께 가요" → 🏫, 선생님)
+function objMeta() {
+  const raw = objective.text || '', pl = plainText(raw), m = EMO_RE.exec(pl);
+  SKIN.icon = m ? m[1] : '📍';
+  const b = /<b>(.*?)<\/b>/i.exec(raw);
+  SKIN.nameT = b ? plainText(b[1]) : (m ? pl.slice(m[0].length) : pl).trim().slice(0, 16);
+}
+const npcNear = (x, z, r) => { let best = null, bd = r; for (const n of Object.values(NPC)) { const g = n.g; if (!g.visible) continue; const d = Math.hypot(g.position.x - x, g.position.z - z); if (d < bd) { bd = d; best = n; } } return best; };
+const relAng = (x, z) => { let r = Math.atan2(-(x - P.x), -(z - P.z)) - SKIN.yaw; return Math.atan2(Math.sin(r), Math.cos(r)); };
+const PLAY_KO = { plane: ['🛩️', '비행기 타기'], swing: ['🎠', '그네'], scooter: ['🛴', '킥보드 타기'], bike: ['🚲', '자전거 타기'], bus: ['🚌', '버스 타기'], carousel: ['🎠', '회전목마'], ball: ['⚽', '공 차기'], balloon: ['🎈', '풍선'], bell: ['🔔', '종 치기'], fountain: ['⛲', '분수'], kite: ['🪁', '연날리기'], fish: ['🎣', '낚시'], hoop: ['🏀', '농구'], chest: ['👑', '보물 상자'], fire: ['🎆', '불꽃놀이'], build: ['🧱', '블록 쌓기'] };
+// 롯데월드: 공원 안 이름난 곳 (안전 시설 · 모이는 곳 · 놀이기구)
+function lwSpots() {
+  const W = window.__lw; if (!W || !W.zone || W.zone() !== 'park') return [];
+  const out = [], add = (ic, name, cat, col, p) => { if (p && isFinite(p[0]) && isFinite(p[1])) out.push({ id: 'lw:' + name, ic, name, cat, col, x: p[0], z: p[1] }); };
+  try {
+    add('🎠', '회전목마', '모이는 곳', '#74c0fc', W.CARO && [W.CARO.x, W.CARO.z]);
+    if (W.FAC) { add('ℹ️', '안내 센터', '안전 시설', '#ff8787', W.FAC.info); add('🩹', '의무실', '안전 시설', '#ff8787', W.FAC.aid); add('🧒', '미아 보호소', '안전 시설', '#ff8787', W.FAC.lost); }
+    add('🎢', '플라이벤처', '놀이기구', '#b197fc', W.FLY && [W.FLY.x, W.FLY.z]);
+    add('🚣', '후룸라이드', '놀이기구', '#b197fc', W.FLUME && [W.FLUME.x, W.FLUME.z]);
+    add('🎭', '공연 무대', '공연', '#faa2c1', W.STAGE && [W.STAGE.x, W.STAGE.z]);
+    add('🏰', '매직아일랜드', '놀이기구', '#b197fc', W.MI && W.MI.gate);
+    add('🍔', '식당', '점심', '#ffa94d', W.FOOD && W.FOOD.ok);
+  } catch (e) {}
+  return out;
+}
+function hlCollect(p) {
+  const rows = [], gx = p ? (objective.exact ? objective.exact()[0] : p[0]) : 0, gz = p ? (objective.exact ? objective.exact()[1] : p[1]) : 0;
+  let gn = null;
+  if (p) {
+    gn = objective.R && objective.R() ? null : npcNear(gx, gz, 1.6);
+    let len = 0; const L0 = NAV.line; if (L0 && L0.length > 1) for (let k = 1; k < L0.length; k++) len += Math.hypot(L0[k][0] - L0[k - 1][0], L0[k][1] - L0[k - 1][1]);
+    rows.push({ id: 'goal', goal: 1, ic: SKIN.icon, npc: gn, name: SKIN.name, cat: '지금 가는 곳', col: '#e8c26a', x: p[0], z: p[1], d: Math.max(len, Math.hypot(p[0] - P.x, p[1] - P.z)) });
+  }
+  const oth = [];
+  for (const n of Object.values(NPC)) {
+    const g = n.g; if (!g.visible || n === gn || n.follow) continue;
+    const mk = g.userData.mark && g.userData.mark.visible; if (!mk && !n.talk) continue;
+    const d = Math.hypot(g.position.x - P.x, g.position.z - P.z); if (d > (mk ? 80 : 30) || d < 0.5) continue;
+    oth.push({ id: 'n:' + n.id, npc: n, ic: '🙂', name: n.name, cat: mk ? '말 걸기 ❗' : '이야기 나누기', col: mk ? '#ff9f7a' : '#63d3c4', x: g.position.x, z: g.position.z, d: d - (mk ? 1000 : 0) });
+  }
+  for (const s of lwSpots()) { if (p && Math.hypot(s.x - gx, s.z - gz) < 4) continue; s.d = Math.hypot(s.x - P.x, s.z - P.z) - 500; oth.push(s); }
+  if (!window.__lw && window.PLAY && PLAY.things) try { // 놀이 기구 (보석으로 타는 것들)
+    for (const th of PLAY.things()) {
+      const k = PLAY_KO[th.kind]; if (!k || th.hidden) continue; const x = th.ux != null ? th.ux : th.x, z = th.uz != null ? th.uz : th.z, d = Math.hypot(x - P.x, z - P.z);
+      if (d > 35 || (p && Math.hypot(x - gx, z - gz) < 3)) continue;
+      oth.push({ id: 'p:' + th.kind + Math.round(x) + ',' + Math.round(z), ic: k[0], name: k[1], cat: th.price ? '놀이 · 💎 ' + th.price : '놀이', col: '#b197fc', x, z, d: d - 500 });
+    }
+  } catch (e) {}
+  oth.sort((a, b) => a.d - b.d);
+  for (const r of oth) { r.d = Math.hypot(r.x - P.x, r.z - P.z); rows.push(r); if (rows.length >= 4) break; }
+  return rows;
+}
+function hlRender(rows) {
+  if (!HL) return;
+  let soft = GFX.soft, made = 0;
+  for (const r of rows) { // 사람이면 얼굴 그림 (한 번에 하나만 새로 그려요)
+    if (!r.npc || soft) continue; const k = 'npc:' + r.npc.name;
+    if (PORT.cache[k] !== undefined) r.img = PORT.cache[k]; else if (!made) { made = 1; r.img = portrait(r.npc.g.userData.opts, k); }
+  }
+  const key = rows.map(r => r.id + '|' + r.name + '|' + (r.img ? 1 : 0) + '|' + r.ic).join(';');
+  if (key !== SKIN.key) {
+    SKIN.key = key;
+    HL.list.innerHTML = rows.map(r => `<div class="row${r.goal ? ' goal' : ''}" style="--c:${r.col}"><span class="ic">${r.img ? `<img alt="" src="${r.img}">` : r.ic}</span><span class="tx"><div class="nm"></div><div class="ct"></div></span><span class="ds"><span class="dv"></span><i class="ar"></i></span></div>`).join('');
+    const els = HL.list.querySelectorAll('.row');
+    rows.forEach((r, i) => { const e = els[i]; e.querySelector('.nm').textContent = r.name || '?'; e.querySelector('.ct').textContent = r.cat; r.dv = e.querySelector('.dv'); r.ar = e.querySelector('.ar'); r.lastD = ''; r.lastA = 99; });
+    SKIN.rows = rows;
+  } else rows.forEach((r, i) => { const o = SKIN.rows[i]; r.dv = o.dv; r.ar = o.ar; r.lastD = o.lastD; r.lastA = o.lastA; SKIN.rows[i] = r; });
+  for (const r of SKIN.rows) {
+    const ds = r.d < 3 ? '도착' : Math.round(r.d) + ' m'; if (ds !== r.lastD) { r.lastD = ds; r.dv.textContent = ds; }
+    const a = relAng(r.x, r.z); if (Math.abs(a - r.lastA) > 0.08) { r.lastA = a; r.ar.style.transform = `rotate(${(-a).toFixed(2)}rad)`; }
+  }
+  HL.el.classList.toggle('show', SKIN.rows.length > 0 && started && !SKIN.pre && !coach.el);
+}
+function skinTick(dt) {
+  SKIN.t += dt; SKIN.slow += dt; SKIN.capT += dt;
+  try { const v = camera.getWorldDirection(SKIN.v || (SKIN.v = new THREE.Vector3())); if (Math.abs(v.x) + Math.abs(v.z) > 1e-4) SKIN.yaw = Math.atan2(-v.x, -v.z); } catch (e) {}
+  if (SKIN.slow > 1) { // 1초에 한 번: 작은 지도·자판 보이기, 흐림 효과 끄기
+    SKIN.slow = 0;
+    const play = started && !SKIN.pre;
+    if (MINI.el) {
+      MINI.el.classList.toggle('show', play);
+      const w = MINI.el.clientWidth - 12, dpr = Math.min(2, GFX.lite ? 1 : (devicePixelRatio || 1)), W = Math.max(64, Math.round(w * dpr));
+      const was = MINI.on; MINI.on = play && w > 0;
+      if (MINI.on && W !== MINI.W) { MINI.W = MINI.cv.width = MINI.cv.height = W; MINI.vig = null; }
+      if (MINI.on && (!was || !MINI.drawn)) mapTick = 0; // 처음 보일 때는 다음 장면에서 바로 그려요
+    }
+    if (CAPS) CAPS.classList.toggle('show', play && !isTouch && !dlgOpen);
+    document.body.classList.toggle('noblur', !!(GFX.soft || GFX.lite));
+  }
+  if (!started && SKIN.pre && !GFX.soft && !GFX.lite && !GFX.wantLite) titleCam(dt); // 느린 컴퓨터에서는 시작 화면도 원래 장면 그대로
+  { const pOn = ui.prompt.style.display === 'block'; if (CAPS && pOn !== SKIN.pOn) { SKIN.pOn = pOn; CAPS.classList.toggle('fade', pOn); } } // 말 걸기 안내가 떠 있으면 자판 안내는 흐리게
+  if (CAPS) { if (dlgOpen && CAPS.classList.contains('show')) CAPS.classList.remove('show'); if (SKIN.capT > 4 && !CAPS.classList.contains('dim')) CAPS.classList.add('dim'); }
+  if (SKIN.t < 0.25) return;
+  SKIN.t = 0;
+  if (SKIN.objT !== objective.text) { SKIN.objT = objective.text; objMeta(); }
+  const p = objective.pos && objective.pos();
+  let nm = SKIN.nameT;
+  if (p && !(objective.R && objective.R())) { const n = npcNear(p[0], p[1], 1.6); if (n) nm = n.name; }
+  SKIN.name = nm;
+  if (SKIN.nav) {
+    const on = !!(p && started && !SKIN.pre && distTxt);
+    SKIN.nav.classList.toggle('off', !on);
+    SKIN.nav.classList.toggle('here', distTxt === '도착!');
+    if (SKIN.navNm.textContent !== nm) SKIN.navNm.textContent = nm;
+    if (SKIN.navEm.textContent !== SKIN.icon) SKIN.navEm.textContent = SKIN.icon;
+  }
+  if (HL) { if (started && !SKIN.pre) hlRender(hlCollect(p)); else HL.el.classList.remove('show'); }
+}
+// 시작 화면: 액자 속 장면은 마을을 비스듬히 위에서 천천히 도는 모습이에요 (액자 가운데에 마을 가운데가 오게 숙여요)
+function titleCam(dt) {
+  const W = window.__lw, c = W && W.CARO ? [W.CARO.x - 22, W.CARO.z - 4] : [0, 2], R = W ? 34 : 46, H = W ? 16 : 26;
+  SKIN.ta = (SKIN.ta || 0) + dt;
+  const a = W ? 1.5 + Math.sin(SKIN.ta * 0.08) * 0.3 : 0.5 + SKIN.ta * 0.045; // 롯데월드: 회전목마 쪽에서 공원 안을 천천히 둘러봐요
+  camera.position.set(c[0] + Math.sin(a) * R, H, c[1] + Math.cos(a) * R);
+  camera.lookAt(c[0], 1.5, c[1]);
+  if ((SKIN.frT = (SKIN.frT || 0) - dt) <= 0) { SKIN.frT = 0.5; try { const r = $('#title .tFrame').getBoundingClientRect(); SKIN.fy = r.height > 10 ? (r.top + r.height / 2) / innerHeight : 0.5; } catch (e) { SKIN.fy = 0.5; } }
+  const ndc = 1 - 2 * (SKIN.fy || 0.5); camera.rotateX(-Math.atan(ndc * Math.tan(camera.fov * Math.PI / 360)));
+}
+// 둥근 작은 지도: 큰 지도(mapCanvas)를 내 자리 둘레만 잘라 돌려서 그려요. 위쪽 = 내가 보는 쪽
+function miniDraw() {
+  if (!MINI.on) return;
+  const c = MINI.ctx, W = MINI.W, R = W / 2, s = mapC.width / 96, cx = mapC.width / 2, k = R / (21 * s), y = SKIN.yaw, u = W / 170;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, W);
+  c.save(); c.beginPath(); c.arc(R, R, R, 0, 7); c.clip();
+  c.fillStyle = '#20264a'; c.fillRect(0, 0, W, W);
+  c.translate(R, R); c.rotate(y); c.scale(k, k); c.translate(-(cx + P.x * s), -(cx + P.z * s));
+  c.drawImage(mapC, 0, 0);
+  c.restore(); MINI.drawn = 1;
+  if (!MINI.vig) { const g = c.createRadialGradient(R, R, R * 0.55, R, R, R); g.addColorStop(0, 'rgba(14,17,40,.12)'); g.addColorStop(1, 'rgba(14,17,40,.62)'); MINI.vig = g; }
+  c.fillStyle = MINI.vig; c.beginPath(); c.arc(R, R, R, 0, 7); c.fill();
+  const cs = Math.cos(y), sn = Math.sin(y);
+  const p = objective.pos && objective.pos();
+  if (p && started) { // 목표: 안이면 금빛 고리, 밖이면 테두리에 금빛 화살촉
+    const dx = (p[0] - P.x) * s * k, dz = (p[1] - P.z) * s * k, x = dx * cs - dz * sn, z = dx * sn + dz * cs, d = Math.hypot(x, z), lim = R - 13 * u;
+    if (d > lim) {
+      const a = Math.atan2(z, x); c.save(); c.translate(R + Math.cos(a) * lim, R + Math.sin(a) * lim); c.rotate(a + Math.PI / 2);
+      c.fillStyle = '#f4c25a'; c.strokeStyle = '#3a2608'; c.lineWidth = 1.5 * u; c.beginPath(); c.moveTo(0, -8 * u); c.lineTo(7 * u, 6 * u); c.lineTo(-7 * u, 6 * u); c.closePath(); c.fill(); c.stroke(); c.restore();
+    } else {
+      const pu = 1 + Math.sin(performance.now() / 260) * 0.18;
+      c.strokeStyle = 'rgba(247,220,149,.9)'; c.lineWidth = 2 * u; c.beginPath(); c.arc(R + x, R + z, 9 * u * pu, 0, 7); c.stroke();
+      c.fillStyle = '#f4c25a'; c.strokeStyle = '#3a2608'; c.lineWidth = 1.5 * u; c.beginPath(); c.arc(R + x, R + z, 4.5 * u, 0, 7); c.fill(); c.stroke();
+    }
+  }
+  // 나: 가운데 크림색 화살표 (내 몸이 보는 쪽)
+  c.save(); c.translate(R, R); c.rotate(y - P.yaw);
+  c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 4 * u;
+  c.fillStyle = '#fff6dc'; c.strokeStyle = '#3a2608'; c.lineWidth = 1.6 * u; c.beginPath(); c.moveTo(0, -10 * u); c.lineTo(7 * u, 8 * u); c.lineTo(0, 4 * u); c.lineTo(-7 * u, 8 * u); c.closePath(); c.fill(); c.shadowBlur = 0; c.stroke(); c.restore();
+  // 방위: N 은 금빛 동그라미, 나머지는 작은 눈금
+  const r0 = R - 9 * u;
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2, vx = Math.sin(a), vz = -Math.cos(a), x = R + (vx * cs - vz * sn) * r0, z = R + (vx * sn + vz * cs) * r0;
+    if (i === 0) { c.fillStyle = '#15182e'; c.strokeStyle = '#e8c26a'; c.lineWidth = 1.5 * u; c.beginPath(); c.arc(x, z, 8 * u, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#f7dc95'; c.font = `bold ${Math.round(10 * u)}px serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('N', x, z + 0.5 * u); }
+    else { c.fillStyle = 'rgba(247,220,149,.75)'; c.beginPath(); c.arc(x, z, 2 * u, 0, 7); c.fill(); }
+  }
+}
 $('#btnStart').onclick = () => begin(true);
 $('#btnContinue').onclick = () => begin(false);
-if (S.stage > 0) { $('#btnContinue').style.display = 'inline-block'; $('#btnContinue').textContent = `이어하기 (${STAGES[Math.min(S.stage, STAGES.length - 1)].title})`; $('#btnStart').textContent = '처음부터'; }
+// 다시 온 학생: '이어하기'가 첫 번째 큰 단추, '처음부터'는 아래쪽 작은 글 단추이고 두 번 눌러야 시작해요 (잘못 눌러 진행을 잃지 않게)
+const RESTART_T = '↺ 처음부터 다시 하기';
+if (S.stage > 0) {
+  const bc = $('#btnContinue'), bs = $('#btnStart'), last = STAGES.length - 1;
+  bc.style.display = 'inline-block';
+  bc.textContent = S.stage >= last ? '🎉 이어서 자유롭게 놀기' : `이어하기 · ${STAGES[Math.min(S.stage, last)].title}`;
+  bs.textContent = RESTART_T; bs.classList.add('restart');
+  bs.onclick = () => {
+    if (bs.classList.contains('arm')) { clearTimeout(bs._t); bs.classList.remove('arm'); begin(true); return; }
+    bs.classList.add('arm'); bs.textContent = '정말 처음부터 할까요? 한 번 더 누르면 시작해요 (별·카드는 그대로)';
+    clearTimeout(bs._t); bs._t = setTimeout(() => { bs.classList.remove('arm'); bs.textContent = RESTART_T; }, 4000);
+  };
+}
+// 시작 화면에서 Enter = 이어하기 (처음이면 시작하기)
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || started || !$('#title').classList.contains('show')) return;
+  const tg = e.target; if (tg && /^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(tg.tagName)) return; // 단추에 초점이 있으면 그 단추가 눌려요
+  e.preventDefault(); const bc = $('#btnContinue'); (bc.style.display !== 'none' && S.stage > 0 ? bc : $('#btnStart')).click();
+});
 $('#rateBtn').textContent = S.rate < 0.9 ? '🐢 천천히' : '🔊 보통';
 resetWorld();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {});
@@ -2704,7 +2968,7 @@ else if (qs.has('portal')) { // 포탈을 타고 왔어요: 시작 화면 없이
 window.__game = { camera, CAM, say, ask, tick: (dt) => update(dt, performance.now() / 1000), get S() { return S; }, P, NPC, startStage, items: () => items, zones, HOME, stallInfo: typeof stallInfo !== 'undefined' ? stallInfo : null, get decor() { return decor; }, get st() { return stageState; }, get held() { return held; }, get busy() { return busy; } };
 if (qs.has('autotest')) { const s = document.createElement('script'); s.src = 'autotest.js'; document.body.appendChild(s); }
 // 함께 하기(multi.js): 반에 참여한 학생끼리 같은 공간에서 만나요. net.js 와 같은 폴더에서 불러와요.
-window.__mp = { scene, makePerson, textSprite, P, L, speak, toast, addStar, confetti, beep, isTouch, prompt: ui.prompt,
+window.__mp = { scene, makePerson, textSprite: (t, h, o) => (o && o.border === '#2a9d8f' && o.bg === '#fff' ? bubbleSprite(t, h * 1.05, { fs: o.fs, pad: o.pad }) : textSprite(t, h, o)), P, L, speak, toast, addStar, confetti, beep, isTouch, prompt: ui.prompt,
   shot() { // 같이 사진 찍기: 내 캐릭터 앞쪽에서 얼굴이 보이게 한 장 찍고, 카메라는 바로 되돌려요
     try {
       const p0 = camera.position.clone(), q0 = camera.quaternion.clone(), f0 = camera.fov;
