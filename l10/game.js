@@ -308,7 +308,7 @@ addEventListener('keydown', (e) => {
   try { localStorage.setItem('english3d_gfx', GFX.lite ? 'lite' : GFX.high ? 'high' : 'low'); } catch (er) {}
 });
 const fogBase = new THREE.Color(), skyTop = new THREE.Color(0x3f86d8), hsl = {};
-const perf = { t0: 0, frames: 0, done: false };
+const perf = { warm: 0, last: 0, samples: [], done: false, fps: 0 };
 let polishT = 1;
 function gfxTick(dt, now) {
   sky.position.copy(camera.position); if (GFX.lite) liteFog();
@@ -320,15 +320,20 @@ function gfxTick(dt, now) {
   clouds.rotation.y += dt * 0.004;
   sun.position.set(P.x + SUN_DIR.x * 60, SUN_DIR.y * 60, P.z + SUN_DIR.z * 60); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
   if ((polishT += dt) > 0.7) { polishT = 0; polish(scene); }
-  if (started && !perf.done && !GFX.fixed) { // 처음 몇 초 동안 재서 느리면 한 단계씩 가볍게 (선명하게 → 가볍게 → 아주 가볍게)
-    if (!perf.t0) perf.t0 = now;
-    perf.frames++;
-    if (now - perf.t0 > 5000) {
-      const fps = perf.frames * 1000 / (now - perf.t0); perf.t0 = 0; perf.frames = 0;
-      if (fps < 28 && GFX.high && GFX.auto) setQuality(false, true);
-      else if (fps < 24 && !GFX.high && !GFX.lite && (GFX.auto || !GFX.wantLite)) { setLite(true, true); perf.done = true; }
-      else perf.done = true;
-    }
+  if (started && !perf.done && !GFX.fixed) { // 느리면 한 단계씩 가볍게 (선명하게 → 가볍게 → 아주 가볍게)
+    // 시작하고 3초는 재지 않아요(그림 준비·물체 합치기로 잠깐 끊겨요). 한 장 그리는 시간의 '가운데 값'으로 재서 가끔 생기는 끊김에 속지 않아요
+    if (!perf.warm) perf.warm = now + 3000;
+    if (now >= perf.warm && !document.hidden) {
+      if (perf.last) perf.samples.push(Math.min(400, now - perf.last));
+      perf.last = now;
+      if (perf.samples.length >= 150 || (perf.samples.length >= 12 && now - perf.warm > 6000)) {
+        const s = perf.samples.slice().sort((x, y) => x - y), fps = 1000 / s[s.length >> 1];
+        perf.samples = []; perf.last = 0; perf.warm = now + 1500; perf.fps = Math.round(fps);
+        if (fps < 28 && GFX.high && GFX.auto) setQuality(false, true);
+        else if (fps < 24 && !GFX.high && !GFX.lite && (GFX.auto || !GFX.wantLite)) { setLite(true, true); perf.done = true; }
+        else perf.done = true;
+      }
+    } else perf.last = 0;
   }
   if (GFX.wantLite && !GFX.lite && started) { GFX.wantLite = false; setLite(true); }
   if (GFX.soft && started && !GFX.softTold) { GFX.softTold = true; setTimeout(() => { try { toast('💻 이 컴퓨터의 크롬이 그래픽 카드를 쓰지 않고 있어 화면을 가볍게 그려요. 크롬 창을 모두 닫았다 다시 열면 빨라질 수 있어요.'); } catch (e) {} }, 2500); }
@@ -434,7 +439,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.3'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.4'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -596,7 +601,7 @@ function mergeStatic() {
   const ok = (o) => {
     if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible) return false;
     const u = o.userData; if (u.anim || u.keep || u.grass || u.merged || u.dyn || u.mergedRec) return false;
-    const m = o.material; if (!m || Array.isArray(m) || m.transparent || m.map || m.alphaMap || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial)) return false;
+    const m = o.material; if (!m || Array.isArray(m) || m.transparent || (m.map && !m.userData.paint) || m.alphaMap || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshBasicMaterial)) return false;
     const g = o.geometry; if (!g || !g.attributes.position || !g.attributes.normal || g.morphAttributes.position || g.attributes.position.count > 4000) return false;
     if (g.type === 'PlaneGeometry' && (g.parameters.width * g.parameters.height) >= 300) return false;
     return true;
@@ -626,8 +631,10 @@ function mergeBuild(cand, qs0) {
   }
   for (const gr of groups.values()) {
     if (gr.length < 2) continue;
+    if (gr[0].material.map && gr.some(o => !o.geometry.attributes.uv)) continue; // 그림 무늬(PAINT) 재질은 무늬 자리(uv)도 함께 옮겨요
+    const vc = !!gr[0].material.vertexColors; if (vc && gr.some(o => !o.geometry.attributes.color)) continue; // 꼭짓점 색으로 칠한 것(놀이 물건)은 색도 옮겨요. 안 옮기면 새까매져요
     let nv = 0, ni = 0; for (const o of gr) { nv += o.geometry.attributes.position.count; ni += o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count; }
-    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni), uvs = gr[0].material.map ? new Float32Array(nv * 2) : null, cols = vc ? new Float32Array(nv * 3) : null;
     const v = new THREE.Vector3(), nm = new THREE.Matrix3();
     let vo = 0, io = 0;
     for (const o of gr) {
@@ -636,12 +643,14 @@ function mergeBuild(cand, qs0) {
         v.fromBufferAttribute(P0, i).applyMatrix4(mw); pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
         v.fromBufferAttribute(N0, i).applyMatrix3(nm).normalize(); nor[(vo + i) * 3] = v.x; nor[(vo + i) * 3 + 1] = v.y; nor[(vo + i) * 3 + 2] = v.z;
       }
+      if (uvs) { const U = g.attributes.uv; for (let i = 0; i < P0.count; i++) { uvs[(vo + i) * 2] = U.getX(i); uvs[(vo + i) * 2 + 1] = U.getY(i); } }
+      if (cols) { const C = g.attributes.color; for (let i = 0; i < P0.count; i++) { cols[(vo + i) * 3] = C.getX(i); cols[(vo + i) * 3 + 1] = C.getY(i); cols[(vo + i) * 3 + 2] = C.getZ(i); } }
       if (g.index) { const I = g.index.array; for (let k = 0; k < I.length; k++) idx[io + k] = I[k] + vo; io += I.length; }
       else { for (let k = 0; k < P0.count; k++) idx[io + k] = vo + k; io += P0.count; }
       vo += P0.count;
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setIndex(new THREE.BufferAttribute(idx, 1)); if (uvs) geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); if (cols) geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     geo.computeBoundingBox(); geo.computeBoundingSphere();
     const mm = new THREE.Mesh(geo, gr[0].material); mm.castShadow = gr[0].castShadow; mm.receiveShadow = gr[0].receiveShadow;
     mm.userData.merged = gr.length; mm.userData.pol = 1; mm.matrixAutoUpdate = false; mm.updateMatrix();
@@ -915,6 +924,375 @@ function textPlane(text, height, o, parent = scene) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(height * w / h, height), new THREE.MeshBasicMaterial({ map: t, transparent: true }));
   parent.add(m); return m;
 }
+
+// ---------- 3.4 그림 같은 화풍 (PAINT): 붓으로 칠한 바닥·길·벽·지붕·물·하늘과 따뜻한 불빛 — 모든 단원이 함께 써요 ----------
+//  · 단원 세계를 다 만든 뒤 PAINT.apply({ sky: '이름' 또는 {...} }) 를 한 번 불러요. ?noart 면 아무것도 하지 않아요 (예전 모습과 비교하기)
+//  · 큰 면(바닥·길·벽·지붕·물)에만 붓질 무늬를 입히고, 무늬 한 장·재질 하나를 여러 곳이 함께 써요.
+//    무늬는 거의 흰 바탕이라 원래 색을 곱해요 → 단원마다 고른 색이 그대로 남아요. 작은 소품은 색만 (엔진이 합쳐 그려요)
+//  · PAINT 재질(userData.paint)은 무늬가 있어도 '움직이지 않는 물체 합치기'에 들어가요 (무늬 자리는 월드 좌표라 이웃 조각과 이어져요)
+//  · CPU 로 그리는 크롬(GFX.soft)이면 무늬 크기를 반으로, 벽·지붕·창문은 색만 (바닥·하늘만 칠해요)
+//  · 엔진 mat(색) 으로 만든 흔한 재질만 바꿔요 (빛·유리·특별한 재질은 그대로). 빼고 싶은 물체는 userData.noart = 1
+const PAINT = (() => {
+  let off = false; try { off = new URLSearchParams(location.search).has('noart'); } catch (e) {}
+  const A = { off, tex: {}, mats: {}, water: [], glows: [], fogHex: null, skyMat: null, applied: false, late: false };
+  let seed = 20261126;
+  const R = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const rgb = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+  const cl = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  const jit = (c, a = 18, l = 0) => { const [r, g, b] = rgb(c), k = (R() - 0.5) * 2 * a + l, f = (v) => cl(v + k + (R() - 0.5) * a * 0.7); return `rgb(${f(r)},${f(g)},${f(b)})`; };
+  const pick = (arr) => arr[(R() * arr.length) | 0];
+  const HSL = (c) => new THREE.Color(c).getHSL({}, THREE.SRGBColorSpace); // 화면에 보이는 색(sRGB) 기준
+  const mix = (a, b, k) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
+  const offHex = (c, dh, ds, dl) => { const k = new THREE.Color(c), h = k.getHSL({}, THREE.SRGBColorSpace); return k.setHSL((h.h + dh + 1) % 1, Math.max(0, Math.min(1, h.s + ds)), Math.max(0, Math.min(1, h.l + dl)), THREE.SRGBColorSpace).getHex(); };
+  // 캔버스 그림 → 무늬 (CPU 로 그리는 크롬이면 512 → 256)
+  function tex(w, h, draw, rep = true) {
+    const c = document.createElement('canvas'), k = GFX.soft && w >= 512 ? 0.5 : 1; c.width = w * k; c.height = h * k;
+    const x = c.getContext('2d'); x.scale(k, k); draw(x, w, h);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = GFX.soft ? 1 : 4; return t;
+  }
+  function wrapDo(W, H, px, py, m, fn) { for (const ox of px < m ? [0, W] : px > W - m ? [0, -W] : [0]) for (const oy of py < m ? [0, H] : py > H - m ? [0, -H] : [0]) fn(px + ox, py + oy); }
+  // 붓질 하나: 살짝 휜 둥근 선 (가장자리에 걸치면 반대편에도 그려서 이음매가 없어요)
+  function dab(x, px, py, len, wid, ang, col, W, H, bend = 0.25) {
+    const dx = Math.cos(ang) * len / 2, dy = Math.sin(ang) * len / 2, bx = -dy * bend, by = dx * bend;
+    x.strokeStyle = col; x.lineWidth = wid; x.lineCap = 'round';
+    wrapDo(W, H, px, py, len + wid, (X, Y) => { x.beginPath(); x.moveTo(X - dx, Y - dy); x.quadraticCurveTo(X + bx, Y + by, X + dx, Y + dy); x.stroke(); });
+  }
+  // 그려 둔 그림 위에 그 자리 색으로 짧은 붓질을 잔뜩 (그림책 → 유화 느낌)
+  function brushify(x, W, H, n, len, wid, alpha, angFn) {
+    const cw = x.canvas.width, sx = cw / W, d = x.getImageData(0, 0, cw, x.canvas.height).data; x.globalAlpha = alpha;
+    for (let i = 0; i < n; i++) {
+      const px = R() * W, py = R() * H, k = (((py * sx) | 0) * cw + ((px * sx) | 0)) * 4, j = (R() - 0.5) * 26;
+      dab(x, px, py, len * (0.6 + R() * 0.8), wid * (0.7 + R() * 0.6), angFn ? angFn(px, py) : (R() - 0.5) * 0.9, `rgb(${cl(d[k] + j)},${cl(d[k + 1] + j)},${cl(d[k + 2] + j * 1.2)})`, W, H, 0.3);
+    }
+    x.globalAlpha = 1;
+  }
+  // 짧은 붓질로 가득 채운 면
+  function strokeTex(base, pal, n, len, wid, angFn, extra) {
+    return tex(512, 512, (x, W, H) => {
+      x.fillStyle = base; x.fillRect(0, 0, W, H);
+      for (let i = 0; i < n; i++) { const px = R() * W, py = R() * H; dab(x, px, py, len * (0.6 + R() * 0.8), wid * (0.7 + R() * 0.6), angFn(px, py), jit(pick(pal), 14), W, H, 0.35); }
+      if (extra) extra(x, W, H);
+    });
+  }
+  // 둥근 돌을 엇갈려 깐 길
+  function cobbleTex(pal, grout, rows = 13) {
+    return tex(512, 512, (x, W, H) => {
+      x.fillStyle = '#' + grout.toString(16).padStart(6, '0'); x.fillRect(0, 0, W, H);
+      for (let i = 0; i < 700; i++) dab(x, R() * W, R() * H, 12, 5, R() * 3, jit(grout, 12), W, H);
+      const rh = H / rows;
+      for (let r = 0; r < rows; r++) {
+        const ws = []; let s = 0; while (s < W - 30) { const w = 30 + R() * 26; ws.push(w); s += w; } const kk = W / s;
+        let x0 = (r % 2) * 20 + R() * 8;
+        for (const w0 of ws) {
+          const w = w0 * kk, cx = x0 + w / 2, cy = r * rh + rh / 2 + (R() - 0.5) * 2.5, c = pick(pal), bw = w - 4 - R() * 2, bh = rh - 4 - R() * 2;
+          wrapDo(W, H, cx, cy, w, (X, Y) => { x.fillStyle = jit(c, 8, -4); x.beginPath(); x.roundRect(X - bw / 2, Y - bh / 2, bw, bh, Math.min(bw, bh) * 0.42); x.fill(); });
+          for (let j = 0; j < 5; j++) dab(x, cx + (R() - 0.5) * w * 0.5, cy + (R() - 0.5) * rh * 0.45, w * (0.22 + R() * 0.22), 3 + R() * 3, (R() - 0.5) * 0.6, jit(c, 18, j % 2 ? 10 : -6), W, H, 0.4);
+          x0 += w;
+        }
+      }
+      brushify(x, W, H, 900, 9, 3, 0.35, () => (R() - 0.5) * 0.8);
+    });
+  }
+  // 네모 보도블록·타일 (블록마다 붓질)
+  function blockTex(pal, line, n = 4) {
+    return tex(512, 512, (x, W, H) => {
+      x.fillStyle = '#' + line.toString(16).padStart(6, '0'); x.fillRect(0, 0, W, H); const s = W / n;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        const c = pick(pal), x0 = i * s + ((j % 2) * s / 2), y0 = j * s;
+        wrapDo(W, H, x0 + s / 2, y0 + s / 2, s, (X, Y) => { x.fillStyle = jit(c, 7); x.fillRect(X - s / 2 + 3, Y - s / 2 + 3, s - 6, s - 6); });
+        for (let k = 0; k < 34; k++) dab(x, x0 + 8 + R() * (s - 16), y0 + 8 + R() * (s - 16), 12 + R() * 16, 4 + R() * 4, (R() - 0.5) * 0.6 + (k % 2 ? 0 : 1.57), jit(c, 16), W, H, 0.3);
+      }
+    });
+  }
+  // 무늬 만들기 (쓰는 것만 처음 쓸 때 한 번 만들어요)
+  const MAKE = {
+    stucco: () => tex(512, 512, (x, W, H) => { // 회벽: 크고 부드러운 붓질 (색 차이는 작게)
+      x.fillStyle = '#f5f2ec'; x.fillRect(0, 0, W, H);
+      for (let i = 0; i < 760; i++) dab(x, R() * W, R() * H, 46 + R() * 50, 14 + R() * 10, (R() - 0.5) * 0.9, jit(pick([0xffffff, 0xf9f5ee, 0xf0ece5, 0xeae5dd, 0xf6efe3, 0xedeaf1]), 5), W, H, 0.35);
+      x.globalAlpha = 0.5; for (let i = 0; i < 260; i++) dab(x, R() * W, R() * H, 18 + R() * 16, 4 + R() * 3, (R() - 0.5) * 1.2, jit(pick([0xffffff, 0xe6e0d6]), 6), W, H, 0.4); x.globalAlpha = 1;
+    }),
+    lawn: () => strokeTex('#edf2e4', [0xffffff, 0xe2edd2, 0xd2e2bf, 0xf5f5d4, 0xc6d9b0, 0xfafbe6], 2600, 15, 4, (px, py) => -1.2 + Math.sin(px * 0.02 + py * 0.035) * 0.6),
+    asphalt: () => strokeTex('#e8eaef', [0xffffff, 0xdadde6, 0xcdd1dc, 0xf1f2f6, 0xd5cfdf, 0xe2e6f0], 2400, 18, 5, () => (R() - 0.5) * 0.5),
+    leaf: () => strokeTex('#eef3e6', [0xffffff, 0xdfe9d0, 0xcddcbb, 0xf4f6dc, 0xc2d4ae, 0xf9fbe9], 2400, 12, 5, () => R() * 6.3),
+    hill: () => strokeTex('#f0f2ea', [0xffffff, 0xe3eada, 0xd6e0c9, 0xf6f2d8, 0xdce4cf, 0xeef3e6], 1600, 24, 8, (px, py) => -0.4 + Math.sin(px * 0.015 + py * 0.02) * 0.7),
+    cobble: () => cobbleTex([0xffffff, 0xffe1dc, 0xe8ddff, 0xdbe9ff, 0xfff0cc, 0xffe2cc, 0xf0f6e4], 0xbdb2a6, 12),
+    tile: () => blockTex([0xffffff, 0xf6f1ea, 0xeeece8, 0xf9f5ee, 0xefe9e2], 0xd2cbc0, 4),
+    plank: () => tex(512, 512, (x, W, H) => { const n = 8, s = H / n; for (let i = 0; i < n; i++) { x.fillStyle = jit(0xf2ece4, 12); x.fillRect(0, i * s, W, s - 3); x.fillStyle = 'rgba(120,96,70,.35)'; x.fillRect(0, i * s + s - 3, W, 3); for (let k = 0; k < 60; k++) dab(x, R() * W, i * s + 3 + R() * (s - 8), 40 + R() * 50, 2.5, (R() - 0.5) * 0.06, jit(0xd8cdbf, 20), W, H, 0.05); } }),
+    slab: () => strokeTex('#f3f1ed', [0xffffff, 0xf7f5f1, 0xeeebe6, 0xe8e4de, 0xfaf8f4, 0xf1ece5], 1100, 46, 11, () => (R() - 0.5) * 0.2, (x, W, H) => { for (let r = 0; r < 8; r++) { x.fillStyle = 'rgba(80,66,60,.09)'; x.fillRect(0, r * H / 8 + H / 8 - 3, W, 3); } }), // 평평한 지붕: 위에서는 지붕 줄, 아래에서는 칠한 천장
+    roof: () => tex(512, 512, (x, W, H) => { // 기와 줄 (색은 재질 색을 곱해요)
+      x.fillStyle = '#d9d9d9'; x.fillRect(0, 0, W, H); const rh = H / 8;
+      for (let r = 0; r < 8; r++) { for (let i = 0; i < 16; i++) { const cx = i * W / 16 + (r % 2) * W / 32; wrapDo(W, H, cx, r * rh, 40, (X, Y) => { x.fillStyle = jit(0xf2f2f2, 16); x.beginPath(); x.ellipse(X, Y + rh * 0.55, W / 32 - 2, rh * 0.55, 0, 0, Math.PI); x.fill(); }); }
+        for (let k = 0; k < 40; k++) dab(x, R() * W, r * rh + R() * rh, 14, 4, 1.4 + (R() - 0.5) * 0.4, jit(0xffffff, 26, -12), W, H, 0.3);
+        x.fillStyle = 'rgba(60,40,40,.35)'; x.fillRect(0, r * rh + rh - 4, W, 4); }
+    }),
+    brick: () => tex(512, 512, (x, W, H) => {
+      x.fillStyle = '#e8d8c8'; x.fillRect(0, 0, W, H); const rows = 16, rh = H / rows, bw = W / 8;
+      for (let r = 0; r < rows; r++) for (let i = 0; i < 9; i++) { const cx = i * bw + (r % 2) * bw / 2, c = pick([0xb5523b, 0xa8472f, 0xc4643f, 0x9e4a3a, 0xbf5a45]);
+        wrapDo(W, H, cx, r * rh + rh / 2, bw, (X, Y) => { x.fillStyle = jit(c, 10); x.fillRect(X - bw / 2 + 3, Y - rh / 2 + 2.5, bw - 6, rh - 5); });
+        for (let k = 0; k < 3; k++) dab(x, cx + (R() - 0.5) * bw * 0.6, r * rh + rh / 2 + (R() - 0.5) * rh * 0.3, bw * 0.35, 3, (R() - 0.5) * 0.2, jit(c, 22), W, H, 0.2); }
+    }),
+    ice: () => tex(512, 512, (x, W, H) => { x.fillStyle = '#e4f4fb'; x.fillRect(0, 0, W, H); for (let i = 0; i < 1300; i++) { const cx = R() * W, cy = R() * H, r = 60 + R() * 220, a0 = R() * 6.28; dab(x, cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, 18 + R() * 30, 2 + R() * 4, a0 + 1.57, pick(['#ffffff', '#cfeaf7', '#e9f6fc', '#bfe0f2', '#f4fbff']), W, H, 0.5); } }), // 빙판: 스케이트 날 자국처럼 둥근 붓질
+    water: () => strokeTex('#4a8bd0', [0x3b7fc4, 0x5aa0e0, 0x7fc0f0, 0x2f6fb0, 0x9fd6f5, 0x4f9ad8], 2200, 30, 5, (px, py) => Math.sin(px * 0.025 + py * 0.06) * 0.35, (x, W, H) => { for (let i = 0; i < 90; i++) dab(x, R() * W, R() * H, 10 + R() * 14, 3, (R() - 0.5) * 0.3, 'rgba(255,255,255,.85)', W, H, 0.4); }),
+    snow: () => strokeTex('#f3f6fb', [0xffffff, 0xeef3fb, 0xe2e9f5, 0xf7f1f6, 0xe6e2f2, 0xfdfaf2, 0xd8e2f1], 2800, 18, 5, (px, py) => -0.3 + Math.sin(px * 0.018 + py * 0.03) * 0.5, (x, W, H) => { for (let i = 0; i < 160; i++) { x.fillStyle = 'rgba(255,255,255,.95)'; x.fillRect(R() * W, R() * H, 2, 2); } }),
+    // 유리창: 위는 하늘이 비치고 아래는 방 안의 따뜻한 불빛 (엔진 창문은 창살이 따로 있어서 창살 없이)
+    glass: () => winTex(false),
+    win: () => winTex(true),
+    glow: () => tex(64, 64, (x) => { const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,.75)'); g.addColorStop(0.45, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); }, false)
+  };
+  function winTex(frame) {
+    return tex(256, 256, (x, W, H) => {
+      const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#b9dcf4'); g.addColorStop(0.42, '#d6eaf4'); g.addColorStop(0.58, '#ffe6ad'); g.addColorStop(1, '#ffcd78'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      for (let i = 0; i < 240; i++) dab(x, R() * W, R() * H * 0.55, 16 + R() * 18, 5 + R() * 4, (R() - 0.5) * 0.5, pick(['#cfe6f7', '#a8d0ef', '#e8f4fb', '#b5d8f2']), W, H, 0.3);
+      for (let i = 0; i < 200; i++) dab(x, R() * W, H * 0.55 + R() * H * 0.45, 14 + R() * 14, 5 + R() * 4, (R() - 0.5) * 0.6, pick(['#ffe2a0', '#ffd27f', '#ffefc6', '#ffc66a', '#f8d8a0']), W, H, 0.3);
+      for (const sx of [0, 1]) for (let i = 0; i < 26; i++) dab(x, sx ? W - 10 - R() * 26 : 10 + R() * 26, H * 0.5 + R() * H * 0.5, 34 + R() * 26, 7 + R() * 5, Math.PI / 2 + (R() - 0.5) * 0.15, pick(['#f3aea3', '#ec958b', '#f8c6bc']), W * 9, H * 9, 0.1);
+      x.globalAlpha = 0.65; for (let i = 0; i < 3; i++) dab(x, W * (0.28 + i * 0.13), H * (0.3 + i * 0.07), 80, 7 - i * 2, -0.9, '#ffffff', W * 9, H * 9, 0); x.globalAlpha = 1;
+      if (frame) { x.strokeStyle = '#fbf8f2'; x.lineWidth = 18; x.strokeRect(0, 0, W, H); x.lineWidth = 10; x.beginPath(); x.moveTo(W / 2, 0); x.lineTo(W / 2, H); x.moveTo(0, H * 0.5); x.lineTo(W, H * 0.5); x.stroke(); }
+    }, false);
+  }
+  const FLOORY = { lawn: 1, asphalt: 1, cobble: 1, tile: 1, plank: 1, water: 1, snow: 1, ice: 1 }; // 비스듬히 보는 바닥만 선명하게(이방성 4), 벽·지붕·잎은 1 (GPU 일을 덜어요)
+  const get = (k) => { let t = A.tex[k]; if (!t) { t = A.tex[k] = MAKE[k](); if (!FLOORY[k]) t.anisotropy = 1; } return t; };
+  // 땅: 그 단원 땅 색으로 칠한 들판 (붓질 + 작은 꽃 점)
+  function meadowTex(hex) {
+    const k = 'meadow' + hex; if (A.tex[k]) return A.tex[k];
+    const pal = [hex, offHex(hex, 0.015, 0.05, -0.08), offHex(hex, -0.03, 0.08, 0.05), offHex(hex, 0.05, -0.05, -0.13), offHex(hex, -0.06, 0.1, 0.0), offHex(hex, 0, -0.05, 0.1), mix(hex, 0xc9b65a, 0.35), offHex(hex, 0.03, 0.0, -0.18)];
+    return (A.tex[k] = strokeTex('#' + new THREE.Color(hex).getHexString(), pal, 3200, 16, 4, (px, py) => -1.2 + Math.sin(px * 0.02 + py * 0.035) * 0.6,
+      (x, W, H) => { for (let i = 0; i < 70; i++) { const c = pick(['#ffffff', '#fff3a8', '#ffc9de', '#e5d4ff', '#fffbe8']), px = R() * W, py = R() * H; dab(x, px, py, 3, 4, 0, c, W, H, 0); } }));
+  }
+  // ---------- 하늘: 아래쪽 하늘에 소용돌이 붓질 + 뭉게구름 (단원마다 색만 조금씩 달라요) ----------
+  const SKY = {
+    school: { st: [[0, '#2f68c0'], [0.5, '#5d95d6'], [0.8, '#9cc6ea'], [0.94, '#d6e9f4'], [1, '#eef1ea']], fog: 0xdde9ee },
+    warm:   { st: [[0, '#3470c2'], [0.5, '#649fdb'], [0.8, '#a9cde9'], [0.93, '#f0dcc6'], [1, '#f8e7d3']], fog: 0xf0e3d6, shade: ['#ece0e4', '#e4e0ee', '#f2e6e2'] },
+    spring: { st: [[0, '#3a7bce'], [0.5, '#72abe5'], [0.8, '#b1d6f1'], [0.93, '#f1dfec'], [1, '#fbedf2']], fog: 0xf0e5ee, shade: ['#eedcec', '#e6dcf2', '#f2e0ea'], cloud: ['#ffffff', '#fff6fa', '#fffaf2'] },
+    lilac:  { st: [[0, '#3a68c6'], [0.5, '#7095dc'], [0.8, '#b1c2ee'], [0.93, '#e3dbf4'], [1, '#f0ebf6']], fog: 0xe7e3f2, shade: ['#ddd4f0', '#d8daf2', '#e8dcf2'] },
+    fresh:  { st: [[0, '#2670c4'], [0.5, '#4c9edb'], [0.8, '#8fcee9'], [0.93, '#d2eeee'], [1, '#ebf7ef']], fog: 0xdbeeea },
+    golden: { st: [[0, '#386cbb'], [0.5, '#6a9dd5'], [0.8, '#b0cde2'], [0.93, '#f0e0bd'], [1, '#f7ead0']], fog: 0xeee2cc, cloud: ['#ffffff', '#fff8e8', '#fff2d6'], shade: ['#ead6c6', '#e6d8d8', '#efdcc8'] },
+    clear:  { st: [[0, '#2265c6'], [0.5, '#4991de'], [0.8, '#8ac2ed'], [0.93, '#d0eaf6'], [1, '#edf6f4']], fog: 0xdaecf2 },
+    pastel: { st: [[0, '#476cc7'], [0.5, '#809cdf'], [0.8, '#bfc2ee'], [0.93, '#f1d7e6'], [1, '#f8e8ef']], fog: 0xefe1eb, shade: ['#e7d1ea', '#e0d4f2', '#f0d6e4'], ring: ['#ffffff', '#f6ecfa', '#e2dcf6'] },
+    summer: { st: [[0, '#1c5cc0'], [0.5, '#3c87de'], [0.8, '#83bdee'], [0.93, '#cde7f6'], [1, '#e9f4f4']], fog: 0xd6e9f2, clouds: 14 },
+    mint:   { st: [[0, '#2d6cc4'], [0.5, '#5899da'], [0.8, '#9dcfe5'], [0.93, '#d4efe4'], [1, '#edf7ed']], fog: 0xdaeee4 },
+    peach:  { st: [[0, '#3269c2'], [0.5, '#649ad8'], [0.8, '#a6cbe9'], [0.93, '#efdecd'], [1, '#f6eadf']], fog: 0xede3d9, shade: ['#ead8d8', '#e3dbe9', '#efdcd2'] },
+    winter: { st: [[0, '#5579c4'], [0.5, '#8aa5da'], [0.8, '#c2cde8'], [0.93, '#f0d8d6'], [1, '#f8e6d8']], fog: 0xefe3e0, cloud: ['#ffffff', '#fff6f0', '#fff0e4'], shade: ['#e0d3ea', '#d9d6ee', '#ecd6e0'], ring: ['#ffffff', '#f3eefa', '#dfe2f5'], vort: 5 }
+  };
+  const SKY_D = { cloud: ['#ffffff', '#fffaf0', '#fff7e6', '#ffffff'], shade: ['#e4e0f0', '#dde3f2', '#eeeaf5'], ring: ['#ffffff', '#eaf3fb', '#cfe3f6'], clouds: 8, vort: 4 };
+  function skyTex(o) {
+    const W = 1024, H = 512, hz = H / 2; // 그리기는 1024×512 자리로, 그림은 두 배(2048×1024)로 또렷하게 (CPU 로 그리면 1024)
+    return tex(W * 2, H * 2, (x) => {
+      x.scale(2, 2);
+      const g = x.createLinearGradient(0, 0, 0, hz); o.st.forEach(([k, c]) => g.addColorStop(k, c)); x.fillStyle = g; x.fillRect(0, 0, W, hz);
+      x.fillStyle = '#' + new THREE.Color(o.fog).getHexString(); x.fillRect(0, hz, W, H - hz);
+      // 하늘 바탕: 소용돌이 흐름을 따라가는 그 자리 색 붓질
+      const vort = []; for (let i = 0; i < o.vort; i++) vort.push([(i + R() * 0.6) / o.vort * W, hz * (0.42 + R() * 0.3), 46 + R() * 50, R() < 0.5 ? 1 : -1]);
+      const flow = (px, py) => { let a = Math.sin(py * 0.03 + px * 0.004) * 0.22; for (const [vx, vy, r, s] of vort) { let dx = px - vx; if (dx > W / 2) dx -= W; if (dx < -W / 2) dx += W; const dy = (py - vy) * 1.6, d = Math.hypot(dx, dy); if (d < r * 2) { const k = Math.max(0, 1 - d / (r * 2)); a += (Math.atan2(dy, dx) + s * Math.PI / 2) * k * k * 1.5 - a * k * k; } } return a; };
+      const cw = x.canvas.width, sx = cw / W, d0 = x.getImageData(0, 0, cw, Math.ceil(hz * sx)).data;
+      for (let i = 0; i < 5200; i++) {
+        const py = Math.pow(R(), 0.7) * hz, px = R() * W, k = (((py * sx) | 0) * cw + ((px * sx) | 0)) * 4, j = (R() - 0.45) * 30;
+        dab(x, px, py, 12 + R() * 16, 3 + R() * 3, flow(px, py), `rgba(${cl(d0[k] + j * 0.8)},${cl(d0[k + 1] + j)},${cl(d0[k + 2] + j * 1.1)},0.7)`, W, H * 4, 0.3);
+      }
+      // 부드러운 소용돌이 (흰 빛 고리, 살짝)
+      for (const [vx, vy, r, s] of vort) for (let ring = 0; ring < 4; ring++) { const rr = r * (0.3 + ring * 0.22); x.globalAlpha = 0.24 - ring * 0.035; for (let a = 0; a < 6.28; a += 0.2) dab(x, (vx + Math.cos(a) * rr * 1.5 + W) % W, vy + Math.sin(a) * rr * 0.6, 14, 3.5, a + s * 1.57, pick(o.ring), W, H * 4, 0.2); x.globalAlpha = 1; }
+      // 지평선 가까이 옅은 새털구름
+      x.globalAlpha = 0.45; for (let i = 0; i < 110; i++) dab(x, R() * W, hz * (0.7 + R() * 0.24), 40 + R() * 60, 2 + R() * 2.5, (R() - 0.5) * 0.12, pick(o.ring), W, H * 4, 0.08); x.globalAlpha = 1;
+      // 뭉게구름: 둥근 덩이 여러 개 (아래는 그늘 색, 위는 크림색) + 덩이를 따라 도는 붓질
+      const fillE = (px, py, rx, ry, col) => { x.fillStyle = col; for (const ox of [0, W, -W]) { if (px + ox + rx < 0 || px + ox - rx > W) continue; x.beginPath(); x.ellipse(px + ox, py, rx, ry, 0, 0, 6.29); x.fill(); } };
+      for (let i = 0; i < o.clouds; i++) {
+        const big = i % 3 === 0, cx = (i + R() * 0.7) / o.clouds * W, cy = hz * (0.82 + R() * 0.1), cw2 = big ? 34 + R() * 16 : 14 + R() * 18, n = big ? 5 + ((R() * 3) | 0) : 3 + ((R() * 2) | 0), puffs = [];
+        for (let k = 0; k < n; k++) { const f = (k + 0.5) / n, pr = cw2 * (0.2 + 0.3 * Math.sin(f * Math.PI)) * (0.8 + R() * 0.4); puffs.push([cx - cw2 + f * 2 * cw2 + (R() - 0.5) * 10, cy - pr * 0.4, pr]); }
+        x.globalAlpha = 0.95; for (const [px, py, pr] of puffs) fillE(px, py + pr * 0.18, pr, pr * 0.78, pick(o.shade));
+        fillE(cx, cy + 1, cw2 * 1.05, Math.max(4, cw2 * 0.1), pick(o.shade));
+        for (const [px, py, pr] of puffs) fillE(px - pr * 0.06, py - pr * 0.1, pr * 0.86, pr * 0.62, pick(o.cloud)); x.globalAlpha = 1;
+        for (const [px, py, pr] of puffs) for (let k = 0; k < 22; k++) { const a = R() * 6.28, rr = pr * (0.35 + R() * 0.6), qy = py + Math.sin(a) * rr * 0.7; dab(x, (px + Math.cos(a) * rr + W) % W, qy, pr * (0.3 + R() * 0.3), 2.5 + R() * 3, a + 1.57, qy > py + pr * 0.2 ? pick(o.shade) : pick(o.cloud), W, H * 4, 0.35); }
+      }
+    }, false);
+  }
+  // ---------- 무늬 자리 (월드 좌표로 잡아서 이웃 조각과 이어져요) ----------
+  const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
+  function worldUV(o, tile) {
+    const g = o.geometry, P0 = g.attributes.position, N0 = g.attributes.normal, uv = g.attributes.uv; if (!uv || !N0 || g.userData.artUV) return; g.userData.artUV = 1;
+    o.updateMatrixWorld(true); _nm.getNormalMatrix(o.matrixWorld);
+    for (let i = 0; i < P0.count; i++) {
+      _v.fromBufferAttribute(P0, i).applyMatrix4(o.matrixWorld); _n.fromBufferAttribute(N0, i).applyMatrix3(_nm);
+      const ax = Math.abs(_n.x), ay = Math.abs(_n.y), az = Math.abs(_n.z);
+      if (ay >= ax && ay >= az) uv.setXY(i, _v.x / tile, -_v.z / tile); else if (ax >= az) uv.setXY(i, _v.z / tile, _v.y / tile); else uv.setXY(i, _v.x / tile, _v.y / tile);
+    }
+    uv.needsUpdate = true;
+  }
+  function roundUV(o, tile) { const g = o.geometry, p = g.parameters, uv = g.attributes.uv; if (!uv || g.userData.artUV) return; g.userData.artUV = 1; const s = o.scale, r = Math.max(p.radiusTop || 0, p.radiusBottom || 0, p.radius || 0) * Math.max(s.x, s.z); const ku = Math.max(1, Math.round(2 * Math.PI * r / tile)), kv = Math.max(1, p.height * s.y / tile); for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ku, uv.getY(i) * kv); uv.needsUpdate = true; }
+  // 재질은 (무늬 × 곱할 색) 마다 하나 → 같은 색 벽끼리 합쳐 그려요
+  function pm(key, t, tint = 0xffffff, rough = 0.95, o = {}) {
+    const k = key + '|' + tint + '|' + rough; let m = A.mats[k];
+    if (!m) { m = A.mats[k] = new THREE.MeshStandardMaterial(Object.assign({ map: t, color: tint, roughness: rough }, o)); m.userData.paint = 1; }
+    return m;
+  }
+  // 바닥 색 → 무늬 [이름, 한 장 크기(m), 곱할 색]
+  function floorKind(hex, w, d, want) {
+    const c = HSL(hex), area = w * d, long = Math.max(w, d) / Math.max(0.01, Math.min(w, d));
+    const k = want || (c.s < 0.22 && c.l < 0.5 ? 'asphalt'
+      : c.h > 0.5 && c.h < 0.67 && c.s > 0.4 && c.l > 0.3 && c.l < 0.82 ? 'water'
+      : c.h > 0.48 && c.h < 0.64 && c.s > 0.3 && c.l >= 0.82 ? 'ice'
+      : c.h > 0.17 && c.h < 0.48 && c.s > 0.2 && c.l < 0.82 ? 'lawn'
+      : c.h > 0.03 && c.h < 0.14 && c.s > 0.2 && c.l > 0.3 && c.l < 0.76 ? 'plank'
+      : c.l > 0.6 && (area >= 1000 || (long >= 4 && area >= 60)) ? 'cobble'
+      : c.l > 0.6 ? 'tile' : 'stucco');
+    const T = { asphalt: 4, water: 3.5, ice: 5, lawn: 4.5, plank: 2.4, cobble: 3.2, tile: 2.6, stucco: 3, snow: 8, brick: 2.2 }[k] || 3;
+    return [k, T, k === 'water' ? mix(hex, 0xffffff, 0.55) : k === 'brick' || k === 'snow' || k === 'ice' ? 0xffffff : hex];
+  }
+  function floorMat(k, tint) { return k === 'water' ? pm('water', get('water'), tint, 0.25) : k === 'ice' ? pm('ice', get('ice'), tint, 0.3, { metalness: 0.05 }) : pm(k, get(k), tint, k === 'asphalt' ? 0.92 : 0.95); }
+  function paintFloor(o, hex, w, d, want) { const [k, t, tint] = floorKind(hex, w, d, want); worldUV(o, t); o.material = floorMat(k, tint); }
+  // ---------- 큰 면 찾아 칠하기 (색·모양으로 찾아요) ----------
+  A.surfaces = function (opt = {}) {
+    const FL = opt.floor || {}, soft = GFX.soft;
+    scene.updateMatrixWorld(true);
+    const todo = []; scene.traverse(o => { if (o.isMesh && !o.isInstancedMesh) todo.push(o); });
+    for (const o of todo) {
+      let skip = false; for (let a = o; a; a = a.parent) if (a.userData.dyn || a.userData.noart || a.userData.anim || a.userData.keep) { skip = true; break; } if (skip) continue;
+      const m = o.material; if (!m || Array.isArray(m) || !m.isMeshStandardMaterial || m.map || m.transparent || !m.color) continue;
+      const hex = m.color.getHex(); if (mats[hex] !== m) continue; // 엔진 mat() 으로 만든 흔한 색만
+      const g = o.geometry, p = g.parameters || {}, s = o.scale, t = g.type, y = o.matrixWorld.elements[13], c = HSL(hex);
+      if (t === 'PlaneGeometry') {
+        if (Math.abs(o.rotation.x + Math.PI / 2) > 0.01) continue;
+        const w = p.width * s.x, d = p.height * s.y;
+        if (w >= 200) { // 땅: 들판(또는 눈밭). 엔진 꾸미기(풀 포기·꽃·눈송이)는 원래 색으로 그대로
+          const snow = c.l > 0.85 && c.s < 0.4; worldUV(o, snow ? 8 : 7);
+          o.material = new THREE.MeshStandardMaterial({ map: snow ? get('snow') : meadowTex(hex), roughness: 1 }); o.userData.grass = 1; o.userData.grassHex = hex; continue;
+        }
+        if (w * d >= 6 && Math.min(w, d) >= 1) paintFloor(o, hex, w, d, FL[hex]);
+        continue;
+      }
+      if (t === 'CircleGeometry') { // 둥근 마당
+        const r = p.radius * Math.max(s.x, s.y); if (Math.abs(o.rotation.x + Math.PI / 2) < 0.01 && r >= 2) paintFloor(o, hex, r * 2, r * 2, FL[hex]);
+        continue;
+      }
+      if (t === 'BoxGeometry') {
+        const w = p.width * s.x, h = p.height * s.y, d = p.depth * s.z, flat = Math.abs(o.rotation.x) < 0.6 && Math.abs(o.rotation.z) < 0.6;
+        if (h <= 0.06 && w * d >= 6 && Math.min(w, d) >= 1 && flat) { paintFloor(o, hex, w, d, FL[hex]); continue; }                       // 얇은 바닥판
+        if (h <= 0.5 && y - h / 2 < 0.15 && w * d >= 12 && Math.min(w, d) >= 2 && flat) { paintFloor(o, hex, w, d, FL[hex]); continue; }   // 낮은 단(무대·마루)
+        if (soft) continue;
+        if (h <= 0.6 && y >= 2.4 && w * d >= 12 && flat) { worldUV(o, 2.6); o.material = pm('slab', get('slab'), hex, 0.85); continue; }      // 평평한 지붕
+        if (Math.min(w, d) <= 0.12 && Math.max(w, d) >= 0.5 && Math.max(w, d) <= 2.8 && h >= 0.5 && h <= 2.8 && c.h > 0.5 && c.h < 0.66 && c.l > 0.68 && c.s > 0.3) { o.material = pm('win', get('win'), 0xffffff, 0.35, { emissive: 0xffffff, emissiveMap: get('win'), emissiveIntensity: 0.22, metalness: 0.1 }); continue; } // 창문
+        if (h >= 0.7 && Math.max(w, d) >= 3.5) {                                                                                            // 벽
+          if (c.l < 0.22) continue;
+          if ((c.h < 0.05 || c.h > 0.97) && c.s > 0.35 && c.l > 0.25 && c.l < 0.55) { worldUV(o, 2.2); o.material = pm('brick', get('brick')); }
+          else { worldUV(o, 3.2); o.material = pm('stucco', get('stucco'), hex); }
+        }
+        continue;
+      }
+      if (t === 'CylinderGeometry') {
+        const r = Math.max(p.radiusTop, p.radiusBottom) * Math.max(s.x, s.z), h = p.height * s.y;
+        if (r >= 0.8 && c.h > 0.5 && c.h < 0.67 && c.s > 0.4 && c.l > 0.3 && c.l < 0.82) { worldUV(o, 3.5); o.material = floorMat('water', mix(hex, 0xffffff, 0.55)); continue; } // 분수·연못 물
+        if (r >= 2 && h <= 0.5 && y - h / 2 < 0.15) { paintFloor(o, hex, r * 2, r * 2, FL[hex]); continue; }                                    // 둥근 단
+        if (soft) continue;
+        if (r >= 0.55 && h >= 4 && c.l >= 0.22) { roundUV(o, 2.4); o.material = pm('stucco', get('stucco'), hex); }                              // 탑·둥근 기둥
+        continue;
+      }
+      if (t === 'ConeGeometry' && !soft) {
+        const r = p.radius * Math.max(s.x, s.z), h = p.height * s.y;
+        if (r >= 0.7 && h >= 0.9 && r <= 6 && !(c.h > 0.17 && c.h < 0.48)) { roundUV(o, 1.6); o.material = pm('roof', get('roof'), hex, 0.8); } // 원뿔 지붕 (초록 원뿔은 나무라서 빼요)
+      }
+    }
+  };
+  // ---------- 먼 언덕: 하나로 합쳐 붓질 (그리기 30번 → 1번) ----------
+  A.hills = function () {
+    const hs = scene.children.filter(o => o.isMesh && o.geometry.type === 'SphereGeometry' && o.geometry.parameters.radius >= 20 && o.position.y < -5 && o.userData.pol);
+    if (hs.length < 2) return;
+    let nv = 0, ni = 0; for (const o of hs) { nv += o.geometry.attributes.position.count; ni += o.geometry.index.count; }
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uvs = new Float32Array(nv * 2), col = new Float32Array(nv * 3), idx = new Uint32Array(ni);
+    let vo = 0, io = 0;
+    for (const o of hs) {
+      o.updateMatrixWorld(true); const g = o.geometry, P0 = g.attributes.position, N0 = g.attributes.normal, U = g.attributes.uv, mw = o.matrixWorld, cc = o.material.color; _nm.getNormalMatrix(mw);
+      for (let i = 0; i < P0.count; i++) {
+        _v.fromBufferAttribute(P0, i).applyMatrix4(mw); pos.set([_v.x, _v.y, _v.z], (vo + i) * 3);
+        _v.fromBufferAttribute(N0, i).applyMatrix3(_nm).normalize(); nor.set([_v.x, _v.y, _v.z], (vo + i) * 3);
+        uvs[(vo + i) * 2] = U.getX(i) * 9; uvs[(vo + i) * 2 + 1] = U.getY(i) * 4; col.set([cc.r, cc.g, cc.b], (vo + i) * 3);
+      }
+      const I = g.index.array; for (let k = 0; k < I.length; k++) idx[io + k] = I[k] + vo; io += I.length; vo += P0.count;
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(new THREE.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
+    const mm = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: get('hill'), roughness: 1 })); mm.userData.pol = 1; mm.userData.keep = 1; mm.receiveShadow = true;
+    for (const o of hs) scene.remove(o);
+    scene.add(mm); A.hillMesh = mm;
+  };
+  // ---------- 하늘 ----------
+  A.sky = function (o) {
+    const base = typeof o === 'string' ? o : (o && o.base) || 'school';
+    for (const ch of base) seed = (seed * 31 + ch.charCodeAt(0) * 977) % 2147483647; // 하늘 이름마다 구름·소용돌이 자리가 달라요
+    const p = Object.assign({}, SKY_D, SKY[base] || SKY.school, typeof o === 'object' ? o : {});
+    const t = skyTex(p); t.wrapS = THREE.RepeatWrapping; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; // 하늘은 늘 크게 보여서 작은 그림(밉맵)이 필요 없어요 (메모리·CPU 그리기 아끼기)
+    A.skyMat = new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false });
+    sky.material = A.skyMat; clouds.clear(); // 하늘 그림에 구름이 있어서 둥근 구름 공은 치워요 (그리기 횟수도 줄어요)
+    A.fogHex = p.fog; scene.fog.color.setHex(p.fog); if (scene.background && scene.background.isColor) scene.background.setHex(p.fog);
+  };
+  A.rain = function (on) { if (A.off || !A.skyMat) return; A.skyMat.color.setHex(on ? 0x8d97a6 : 0xffffff); };
+  // ---------- 빛 번짐: 점 하나에 동그란 빛 그림 (Points 하나 = 그리기 한 번) ----------
+  A.halo = function (list, size = 1.6, opacity = 0.5) {
+    if (A.off || !list.length) return null;
+    const pos = new Float32Array(list.length * 3), col = new Float32Array(list.length * 3), c = new THREE.Color();
+    list.forEach(([x, y, z, h], i) => { pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z; c.setHex(h || 0xffc46b); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const pt = new THREE.Points(g, new THREE.PointsMaterial({ size, map: get('glow'), vertexColors: true, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+    pt.userData.pol = 1; pt.renderOrder = 2; scene.add(pt); A.glows.push(pt); return pt;
+  };
+  // 엔진 창문(detailWorld 유리)에 하늘·불빛 그림
+  function glassPaint(k) { const t = get('glass'); Object.assign(winGlassMat, { map: t, emissiveMap: t, roughness: 0.3, metalness: 0.1, emissiveIntensity: k }); winGlassMat.color.setHex(0xffffff); winGlassMat.emissive.setHex(0xffffff); winGlassMat.needsUpdate = true; }
+  // 가로등 전구(lampPost2)는 하나씩 새 재질이라 같은 것끼리 하나로 (엔진이 합쳐 그려요)
+  function lampShare() { let one = null; scene.traverse(o => { const m = o.material; if (!o.isMesh || !m || !m.isMeshStandardMaterial || m.map || m.transparent) return; if (m.color.getHex() === 0xfff3bf && m.emissive.getHex() === 0xffe08a && m.emissiveIntensity === 0.9 && m.roughness === 0.4) { if (!one) one = m; else o.material = one; } }); }
+  // 둥근 나무(엔진 꾸미기가 뾰족한 나무를 바꾼 것): 잎 덩이 4개를 꼭짓점 색으로 한 덩어리로 (나무 하나 그리기 4번 → 1번, 그림자도)
+  let treeM = null;
+  function bakeTrees() {
+    const leaf = new Set(Object.values(leafMats)), m4 = new THREE.Matrix4(); let n = 0;
+    for (const G of scene.children.slice()) {
+      if (!G.isGroup || G.children.length < 2 || G.userData.dyn || G.userData.anim || !G.visible) continue;
+      if (!G.children.every(c => c.isMesh && c.visible && c.geometry.type === 'IcosahedronGeometry' && leaf.has(c.material))) continue;
+      G.updateMatrixWorld(true); const inv = G.matrixWorld.clone().invert(), parts = []; let nv = 0;
+      for (const c of G.children) { const g = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone(); m4.multiplyMatrices(inv, c.matrixWorld); g.applyMatrix4(m4); parts.push([g, c.material.color]); nv += g.attributes.position.count; }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3); let j = 0;
+      for (const [g, c] of parts) { const cnt = g.attributes.position.count; pos.set(g.attributes.position.array, j * 3); nor.set(g.attributes.normal.array, j * 3); for (let i = 0; i < cnt; i++) { col[(j + i) * 3] = c.r; col[(j + i) * 3 + 1] = c.g; col[(j + i) * 3 + 2] = c.b; } j += cnt; g.dispose(); }
+      const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); bg.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); bg.setAttribute('color', new THREE.BufferAttribute(col, 3)); bg.computeBoundingSphere();
+      if (!treeM) treeM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true, map: GFX.soft ? null : get('leaf') });
+      const mm = new THREE.Mesh(bg, treeM); mm.castShadow = true; mm.receiveShadow = true; mm.userData.pol = 1;
+      for (const c of G.children.slice()) G.remove(c);
+      G.add(mm); if (treeM.map) { bg.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(nv * 2), 2)); worldUV(mm, 1.6); } n++; // 잎에 붓질 (월드 좌표로)
+    }
+    return n;
+  }
+  // 엔진 꾸미기(창문·천장등)가 놓인 다음: 전구마다 따뜻한 빛 번짐
+  function lateStep(opt) {
+    try { A.trees = bakeTrees(); } catch (e) { console.warn(e); }
+    try { if (!GFX.soft) { const leaf = new Set(Object.values(leafMats)); for (const o of scene.children) if (o.isInstancedMesh && o.geometry.type === 'IcosahedronGeometry' && leaf.has(o.material)) { o.material = o.material.clone(); o.material.map = get('leaf'); } } } catch (e) { console.warn(e); } // 덤불에도 잎 붓질
+    const list = [], lan = [], wp = new THREE.Vector3();
+    scene.traverse(o => {
+      if (!o.isMesh || o.isInstancedMesh || !o.visible) return; const m = o.material, g = o.geometry; if (!m || Array.isArray(m) || !g || g.type !== 'SphereGeometry' || g.parameters.radius > 0.35) return;
+      let dyn = false; for (let a = o; a; a = a.parent) if (a.userData.dyn || a.userData.anim || a.userData.tag) dyn = true; if (dyn) return;
+      const lamp = (m.isMeshStandardMaterial && m.emissive && m.emissive.getHex() === 0xffe08a && m.emissiveIntensity >= 0.8) || (m.isMeshBasicMaterial && !m.map && m.color.getHex() === 0xfff3bf);
+      if (lamp) { o.getWorldPosition(wp); list.push([wp.x, wp.y, wp.z, 0xffc46b]); }
+      else if (m.isMeshStandardMaterial && g.parameters.radius === 0.3 && m.emissiveIntensity === 0.35 && m.emissive.getHex() === m.color.getHex()) { o.getWorldPosition(wp); lan.push([wp.x, wp.y, wp.z, mix(m.color.getHex(), 0xffe6a0, 0.45)]); } // 등불 줄(lanternLine)
+    });
+    for (const e of opt.glows || []) list.push(e);
+    const k = GFX.soft ? 0 : opt.glow == null ? 1 : opt.glow; // CPU 로 그리면 빛 번짐은 빼요 (겹쳐 그리는 점이 비싸요)
+    if (list.length && k > 0) { A.halo(list, 1.9, 0.42 * k); A.halo(list.map(([x, y, z]) => [x, y, z, 0xfff1c9]), 0.55, Math.min(1, 0.8 * k)); }
+    if (lan.length && k > 0) A.halo(lan, 2.8, 0.42 * k);
+    // 꽃가루·눈송이(엔진 꾸미기)를 네모 대신 동그란 빛 알갱이로
+    if (FX2.pollen && FX2.pollen.pts) { const pm0 = FX2.pollen.pts.material; pm0.map = get('glow'); pm0.size *= 1.8; pm0.needsUpdate = true; }
+  }
+  // ---------- 한 번에: 하늘 → 언덕 → 큰 면 → 창문 → (꾸미기 뒤) 빛 번짐 ----------
+  A.apply = function (opt = {}) {
+    if (A.off || A.applied) return; A.applied = true; A.opt = opt;
+    const t0 = performance.now();
+    try { A.sky(opt.sky || 'school'); } catch (e) { console.warn(e); }
+    try { A.hills(); } catch (e) { console.warn(e); }
+    try { A.surfaces(opt); } catch (e) { console.warn(e); }
+    try { if (!GFX.soft) glassPaint(opt.winGlow == null ? 0.2 : opt.winGlow); } catch (e) { console.warn(e); }
+    try { lampShare(); } catch (e) { console.warn(e); }
+    FX2.tickers.push((dt, t) => {
+      if (!A.late) { A.late = true; try { lateStep(opt); } catch (e) { console.warn(e); } }
+      const w = A.tex.water; if (w) w.offset.x = t * 0.03;
+      if (A.hillMesh) A.hillMesh.visible = !(GFX.lite && GFX.soft); // CPU 로 그리며 아주 가볍게: 언덕은 보이는 거리(50m) 밖이라 안 그려요
+    });
+    A.ms = Math.round(performance.now() - t0);
+  };
+  try { window.__paint = A; } catch (e) {} // 개발용: 콘솔에서 살펴보기
+  A.get = get; A.pm = pm; A.worldUV = worldUV; A.roundUV = roundUV; A.dab = dab; A.tex2 = tex; A.R = R; A.SKY = SKY;
+  return A;
+})();
 
 // ---------------- 사람 ----------------
 // 2.0: 교과서 친구 6명은 이름만으로 그 모습이 돼요. 다른 사람은 이름에 따라 머리 모양·옷 무늬가 달라져요.
@@ -1374,6 +1752,9 @@ function drawMapWorld(tx, tz, s) {
   R(WHISPER.x, WHISPER.z, 16, 4, '#e64980', '속삭이기'); R(WRITE.x, WRITE.z, 16, 10, '#d6336c', '글쓰기');
   R(0, -37, 56, 14, '#ae3ec9', '꿈나라');
 }
+
+// ---------- 그림 같은 화풍: 붓으로 칠한 들판·길·벽·지붕·물·하늘 (엔진 PAINT, ?noart 로 끄기) ----------
+PAINT.apply({ sky: 'mint' });
 
 // ---------------- 플레이어 ----------------
 const P = { x: 0, z: 40, yaw: 0, pitch: 0, r: 0.4, jy: 0, vy: 0 };
@@ -2812,9 +3193,11 @@ function skinTick(dt) {
     if (CAPS) CAPS.classList.toggle('show', play && !isTouch && !dlgOpen);
     document.body.classList.toggle('noblur', !!(GFX.soft || GFX.lite));
   }
-  if (!started && SKIN.pre && !GFX.soft && !GFX.lite && !GFX.wantLite) titleCam(dt); // 느린 컴퓨터에서는 시작 화면도 원래 장면 그대로
+  if (!started && SKIN.pre) titleCam(GFX.soft || GFX.lite || GFX.wantLite ? 0 : dt); // 느린 컴퓨터에서는 같은 장면을 멈춘 채로 보여 줘요
+  else titleCamOff();
   { const pOn = ui.prompt.style.display === 'block'; if (CAPS && pOn !== SKIN.pOn) { SKIN.pOn = pOn; CAPS.classList.toggle('fade', pOn); } } // 말 걸기 안내가 떠 있으면 자판 안내는 흐리게
   if (CAPS) { if (dlgOpen && CAPS.classList.contains('show')) CAPS.classList.remove('show'); if (SKIN.capT > 4 && !CAPS.classList.contains('dim')) CAPS.classList.add('dim'); }
+  if (CAPS && !SKIN.learned && started && !dlgOpen && SKIN.capT < 0.5 && CAPS.querySelector('.k.on')) { SKIN.moveT = (SKIN.moveT || 0) + dt; if (SKIN.moveT > 20) { SKIN.learned = true; CAPS.classList.add('learned'); } } // 20초쯤 움직여 봤으면 자판 안내는 거의 투명하게 (내 캐릭터를 가리지 않게)
   if (SKIN.t < 0.25) return;
   SKIN.t = 0;
   if (SKIN.objT !== objective.text) { SKIN.objT = objective.text; objMeta(); }
@@ -2839,8 +3222,11 @@ function titleCam(dt) {
   camera.position.set(c[0] + Math.sin(a) * R, H, c[1] + Math.cos(a) * R);
   camera.lookAt(c[0], 1.5, c[1]);
   if ((SKIN.frT = (SKIN.frT || 0) - dt) <= 0) { SKIN.frT = 0.5; try { const r = $('#title .tFrame').getBoundingClientRect(); SKIN.fy = r.height > 10 ? (r.top + r.height / 2) / innerHeight : 0.5; } catch (e) { SKIN.fy = 0.5; } }
-  const ndc = 1 - 2 * (SKIN.fy || 0.5); camera.rotateX(-Math.atan(ndc * Math.tan(camera.fov * Math.PI / 360)));
+  // 액자 가운데에 장면 가운데가 오게: 카메라를 숙이지 않고 그림을 위로 옮겨요(세로 화면에서도 바닥만 보이지 않게)
+  const W0 = innerWidth, H0 = innerHeight, y0 = Math.round((0.5 - (SKIN.fy || 0.5)) * H0);
+  if (SKIN.vo !== y0 + ':' + W0 + 'x' + H0) { SKIN.vo = y0 + ':' + W0 + 'x' + H0; camera.setViewOffset(W0, H0, 0, y0, W0, H0); }
 }
+function titleCamOff() { if (SKIN.vo) { SKIN.vo = 0; camera.clearViewOffset(); } }
 // 둥근 작은 지도: 큰 지도(mapCanvas)를 내 자리 둘레만 잘라 돌려서 그려요. 위쪽 = 내가 보는 쪽
 function miniDraw() {
   if (!MINI.on) return;

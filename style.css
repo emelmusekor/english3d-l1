@@ -618,3 +618,6 @@ body.game #title .funMedals i{background:rgba(255,255,255,.08)}
   body.game #mpChip{top:calc(var(--hudB,130px) + 8px)}
   body.game:has(#mpChip.show) #hl{top:max(calc(var(--hudB,130px) + 78px),30vh)}
 }
+/* 시작 화면에서는 터치 단추(말 걸기·조이스틱·점프)를 숨겨요 */
+body.pre #actBtn,body.pre #joy,body.pre #jumpBtn,body.pre #mpEmoBtn{display:none!important}
+#keycaps.learned,#keycaps.learned.dim,#keycaps.learned.fade{opacity:.14}
