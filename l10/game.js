@@ -439,7 +439,7 @@ function initUI2() {
     if (new URLSearchParams(location.search).has('cast')) AVATARS.forEach((k, i) => { const g = makePerson({ name: k }); g.position.set(P.x + i * 1.0 - 2.5, 0, P.z - 3.2); scene.add(g); extraPeople.push({ g, flags: { look: [P.x, P.z], wave: i === 3, talk: i === 1 } }); });
   } catch (e) {}
   try {
-    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.4'; sub.appendChild(v); }
+    const sub = document.querySelector('#title .sub'); if (sub) { const v = document.createElement('span'); v.className = 'ver'; v.textContent = 'v3.5'; sub.appendChild(v); }
     const bs = document.querySelector('#btnStart');
     if (bs) {
       const w = document.createElement('div'); w.className = 'avatarPick';
@@ -2512,21 +2512,39 @@ function interact() {
 const bethTalk = NPC.bonus.talk;
 
 // ---------------- 입력 ----------------
+// 키가 '눌린 채'로 남지 않게: 창을 벗어나면(다른 창 누르기, Shift 를 여러 번 눌러 뜨는 고정 키 알림, Windows 키) 키를 뗀 신호가 오지 않아요 → 모두 뗀 것으로 해요
+const KEYC = { 87: 'KeyW', 65: 'KeyA', 83: 'KeyS', 68: 'KeyD', 69: 'KeyE', 81: 'KeyQ', 32: 'Space', 13: 'Enter', 16: 'ShiftLeft', 37: 'ArrowLeft', 38: 'ArrowUp', 39: 'ArrowRight', 40: 'ArrowDown' };
+const keyOf = (e) => e.code || KEYC[e.keyCode] || '';
+const shownEl = (el) => el.isConnected && el.getClientRects().length > 0;
+const typing = (el) => !!el && !!el.tagName && (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.isContentEditable || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range)$/i.test(el.type))) && shownEl(el); // 보이는 글쓰기 칸에 쓰는 중
+function releaseKeys() { for (const k in keys) keys[k] = false; try { joyRelease(); } catch (e) {} }
+addEventListener('blur', releaseKeys);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseKeys(); });
+addEventListener('pagehide', releaseKeys);
+addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) releaseKeys(); }); // 오른쪽 클릭 메뉴가 뜨면 키 떼기 신호가 메뉴로 가요
+canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // 화면 위 오른쪽 클릭은 메뉴 없이 그대로 둘러보기
+document.addEventListener('focusin', (e) => { if (typing(e.target)) releaseKeys(); });
+// 숨겨진 글쓰기 칸·체크 상자·단추에 초점이 남아 있으면 키가 게임에 오지 않아요(E 가 씹혀요) → 그 초점을 풀어요
+addEventListener('keydown', (e) => { const el = e.target; if (el && el !== document.body && el.blur && /^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/.test(el.tagName) && !shownEl(el)) { try { el.blur(); } catch (er) {} } }, true);
 addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (typing(e.target)) return;
+  const c = keyOf(e); if (!c) return;
+  if (!e.shiftKey) keys.ShiftLeft = keys.ShiftRight = false; // Shift 뗀 신호를 놓쳤어도 다음 키에서 바로잡아요 (저절로 계속 달리지 않게)
   if (dlgOpen) {
-    if (['Space', 'Enter', 'KeyE'].includes(e.code) && dlgNextFn && ui.dlg.classList.contains('show')) { e.preventDefault(); skipLine(); }
-    if (dlgChoiceKeys && /^Digit[1-6]$/.test(e.code)) { const b = dlgChoiceKeys[+e.code.slice(5) - 1]; if (b) b.click(); }
-    if (e.code === 'KeyR' && lastSpeech) speak(...lastSpeech);
+    if (e.repeat) return; // 꾹 누르고 있어도 대사가 저절로 휙휙 넘어가지 않게
+    if (['Space', 'Enter', 'KeyE'].includes(c) && dlgNextFn && ui.dlg.classList.contains('show')) { e.preventDefault(); skipLine(); }
+    if (dlgChoiceKeys && /^Digit[1-6]$/.test(c)) { const b = dlgChoiceKeys[+c.slice(5) - 1]; if (b) b.click(); }
+    if (c === 'KeyR' && lastSpeech) speak(...lastSpeech);
     return;
   }
-  keys[e.code] = true;
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (e.code === 'KeyM') toggleMute();
-  if (e.code === 'Space') jump(); // 스페이스는 점프만 해요 (말 걸기는 E·Enter·클릭)
-  else if (['KeyE', 'Enter'].includes(e.code)) interact();
+  keys[c] = true;
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(c)) e.preventDefault();
+  if (e.repeat && c !== 'Space') return; // 꾹 누를 때 저절로 반복되는 신호로는 말 걸기·소리 켜고 끄기를 다시 하지 않아요
+  if (c === 'KeyM') toggleMute();
+  if (c === 'Space') jump(); // 스페이스는 점프만 해요 (말 걸기는 E·Enter·클릭)
+  else if (['KeyE', 'Enter'].includes(c)) interact();
 });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('keyup', (e) => { const c = keyOf(e); if (c) keys[c] = false; if (c === 'ShiftLeft' || c === 'ShiftRight') keys.ShiftLeft = keys.ShiftRight = false; }, true); // 붙잡는 단계(capture)에서 들어요: 글쓰기 칸이 신호를 막아도 키는 떼져요
 let drag = null;
 canvas.addEventListener('mousedown', (e) => {
   if (!started || dlgOpen) return;
@@ -2563,6 +2581,10 @@ canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
 }, { passive: false });
 const endTouch = (e) => { for (const t of e.changedTouches) { if (t.identifier === joyId) { joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; knob.style.transform = ''; } if (t.identifier === lookId) lookId = null; } };
+function joyRelease() { joyId = null; lookId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; knob.style.transform = ''; }
+// 조이스틱 손가락이 화면에 없는데(뗀 신호를 놓쳤을 때) 계속 앞으로 가지 않게: 화면을 만질 때마다 확인해요
+const joyCheck = (e) => { if (joyId === null && lookId === null) return; let j = false, l = false; for (const t of e.touches) { if (t.identifier === joyId) j = true; if (t.identifier === lookId) l = true; } if (joyId !== null && !j) { joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; knob.style.transform = ''; } if (lookId !== null && !l) lookId = null; };
+for (const ev of ['touchstart', 'touchend', 'touchcancel']) document.addEventListener(ev, joyCheck, { capture: true, passive: true });
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
 $('#actBtn').addEventListener('click', () => { if (dlgOpen) { skipLine(); return; } interact(); }); // 대화 중에는 '다음'
 function jump() { if (!started || dlgOpen || P.jy > 0) return; P.vy = 5.2; P.jy = 0.001; beep('jump'); coachDone('jump'); }
@@ -2828,7 +2850,7 @@ function update(dt, t) {
   if (!started) { P.yaw = Math.sin(t * 0.1) * 0.6; }
 
   // NPC
-  nearNPC = null; let nd = 3.0;
+  nearNPC = null; let nd = Infinity; const fwx = -Math.sin(P.yaw), fwz = -Math.cos(P.yaw);
   for (const n of Object.values(NPC)) {
     const g = n.g, p = g.position;
     if (n.follow) {
@@ -2841,8 +2863,10 @@ function update(dt, t) {
     if (!n.follow) p.y = 0;
     { const tg = g.userData.tag; if (tg && !n.hideTag) tg.visible = g.position.distanceTo(camera.position) > 3.6; } // 카메라 바로 앞 사람의 이름표는 화면을 크게 가려서 숨겨요
     const m = g.userData.mark; if (m.visible) m.position.y = (m.userData.baseY || 2.75) + Math.sin(t * 4) * 0.1;
-    const sc = d - (m.visible ? 3 : n.talk ? 1.2 : 0); // ❗ 붙은 미션 친구가 가장 먼저, 그다음 할 말이 있는 친구
-    if (g.visible && d < 3.0 && sc < nd) { nd = sc; nearNPC = n; }
+    let sc = d - (m.visible ? 3 : n.talk ? 1.2 : 0); // ❗ 붙은 미션 친구가 가장 먼저, 그다음 할 말이 있는 친구
+    if (!m.visible && !n.talk && (n.follow || n.inLine || n.camHide)) sc += 2.4; // 나를 따라오는 친구는 둘레에 다른 사람이 없을 때만 (앞사람에게 E 를 눌렀는데 뒤의 친구가 대답하지 않게)
+    if (d > 0.05) sc += (1 + (dx * fwx + dz * fwz) / d) * 0.45; // 내 앞쪽에 있는 사람 먼저
+    if (g.visible && d < 3.0 && sc < nd && (m.visible || n.talk || n.idle)) { nd = sc; nearNPC = n; } // 할 말이 없는 사람은 '말 걸기'를 띄우지 않아요 (눌러도 아무 일이 없어서 E 가 씹힌 것처럼 보여요)
   }
   if (nearNPC && started && !dlgOpen) {
     if (ui.prompt.style.display !== 'block') ui.prompt.style.display = 'block';
